@@ -1,45 +1,31 @@
 # =========================================
-# Problem 2 (SCCM Ready): Outlook Online/Offline Mode (Auto-launch + Close)
+# Problem 2 (SCCM-Safe): Check Outlook Work Offline Registry Status
 # =========================================
 
 try {
-    $outlook = $null
-    $startedOutlook = $false
+    $officeRoot = "HKCU:\Software\Microsoft\Office"
+    $versionKey = (Get-ChildItem $officeRoot -ErrorAction SilentlyContinue |
+                   Where-Object { $_.PSChildName -match '^(15\.0|16\.0)$' } |
+                   Sort-Object PSChildName -Descending | Select-Object -First 1).PSChildName
 
-    # Try to get Outlook if it's already running
-    try {
-        $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application")
-    } catch {}
-
-    # If Outlook not running, start it silently
-    if (-not $outlook) {
-        Write-Output "ℹ️ Outlook not running — launching in background..."
-        Start-Process "outlook.exe" -WindowStyle Hidden
-        Start-Sleep -Seconds 8  # give time to initialize
-        $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application")
-        $startedOutlook = $true
-    }
-
-    if (-not $outlook) {
-        Write-Output "❌ Could not start or connect to Outlook COM instance."
+    if (-not $versionKey) {
+        Write-Output "❌ Could not detect Outlook version (15.0/16.0)."
         exit 1
     }
 
-    $namespace = $outlook.GetNamespace("MAPI")
+    $offlineKey = "HKCU:\Software\Microsoft\Office\$versionKey\Outlook\RPC"
+    $workOffline = (Get-ItemProperty -Path $offlineKey -ErrorAction SilentlyContinue).Offline
 
-    if ($namespace.Offline) {
-        Write-Output "🚫 Outlook is currently in **Offline Mode**."
-    } else {
-        Write-Output "🌐 Outlook is **Online and Connected** to the mail server."
+    if ($null -eq $workOffline) {
+        Write-Output "⚠️ Outlook Offline flag not found — Outlook may not have been launched yet."
     }
-
-    # Cleanly quit Outlook if we started it
-    if ($startedOutlook) {
-        Write-Output "🛑 Closing Outlook (auto-started instance)..."
-        $outlook.Quit()
+    elseif ($workOffline -eq 1) {
+        Write-Output "🚫 Outlook is set to **Work Offline** mode (registry flag = 1)."
+    }
+    else {
+        Write-Output "🌐 Outlook is set to **Online Mode** (registry flag = 0)."
     }
 }
 catch {
-    Write-Output "❌ Error checking Outlook mode: $_"
+    Write-Output "❌ Error reading Outlook registry status: $_"
 }
- 
