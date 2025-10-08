@@ -1,50 +1,45 @@
 # =========================================
-# Problem 2 (Final Reliable): Check Outlook Online/Offline Status
+# Problem 2 (SCCM Ready): Outlook Online/Offline Mode (Auto-launch + Close)
 # =========================================
 
 try {
-    # Try to get Outlook COM object (if Outlook is running)
-    $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application") -ErrorAction SilentlyContinue
+    $outlook = $null
+    $startedOutlook = $false
+
+    # Try to get Outlook if it's already running
+    try {
+        $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application")
+    } catch {}
+
+    # If Outlook not running, start it silently
+    if (-not $outlook) {
+        Write-Output "ℹ️ Outlook not running — launching in background..."
+        Start-Process "outlook.exe" -WindowStyle Hidden
+        Start-Sleep -Seconds 8  # give time to initialize
+        $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application")
+        $startedOutlook = $true
+    }
 
     if (-not $outlook) {
-        Write-Output "⚠️ Outlook is not currently running. Please open Outlook and try again."
+        Write-Output "❌ Could not start or connect to Outlook COM instance."
         exit 1
     }
 
-    # Get the namespace object (MAPI)
     $namespace = $outlook.GetNamespace("MAPI")
 
-    # Check if Outlook is offline
     if ($namespace.Offline) {
         Write-Output "🚫 Outlook is currently in **Offline Mode**."
+    } else {
+        Write-Output "🌐 Outlook is **Online and Connected** to the mail server."
     }
-    else {
-        # Try to detect account connection states (for multiple mailboxes)
-        $stores = $namespace.Stores
-        $connectedCount = 0
-        $disconnectedCount = 0
 
-        foreach ($store in $stores) {
-            try {
-                if ($store.IsDataFileStore -eq $false) {
-                    if ($store.ExchangeStoreType -ne $null) {
-                        if ($store.Connected) { $connectedCount++ } else { $disconnectedCount++ }
-                    }
-                }
-            } catch {}
-        }
-
-        if ($connectedCount -gt 0 -and $disconnectedCount -eq 0) {
-            Write-Output "🌐 Outlook is **Online and Connected** to the mail server."
-        }
-        elseif ($connectedCount -gt 0 -and $disconnectedCount -gt 0) {
-            Write-Output "⚠️ Outlook has **some accounts online and some offline.**"
-        }
-        else {
-            Write-Output "⚠️ Outlook appears **Disconnected** from the mail server."
-        }
+    # Cleanly quit Outlook if we started it
+    if ($startedOutlook) {
+        Write-Output "🛑 Closing Outlook (auto-started instance)..."
+        $outlook.Quit()
     }
 }
 catch {
-    Write-Output "❌ Error checking Outlook status: $_"
+    Write-Output "❌ Error checking Outlook mode: $_"
 }
+ 
