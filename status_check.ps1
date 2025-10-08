@@ -1,62 +1,50 @@
 # =========================================
-# Problem 2 (Enhanced): Check Outlook Online/Offline Status
+# Problem 2 (Final Reliable): Check Outlook Online/Offline Status
 # =========================================
 
-param(
-    [string]$ProfileName = "DiagOSTProfile"  # <-- Change if needed
-)
-
 try {
-    # Detect installed Outlook version dynamically
-    $officeRoot = "HKCU:\Software\Microsoft\Office"
-    $versionKey = (Get-ChildItem $officeRoot -ErrorAction SilentlyContinue | 
-                  Where-Object { $_.PSChildName -match '^(15\.0|16\.0)$' } |
-                  Sort-Object PSChildName -Descending | Select-Object -First 1).PSChildName
+    # Try to get Outlook COM object (if Outlook is running)
+    $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application") -ErrorAction SilentlyContinue
 
-    if (-not $versionKey) {
-        Write-Output "❌ Could not detect Outlook version (15.0/16.0)."
+    if (-not $outlook) {
+        Write-Output "⚠️ Outlook is not currently running. Please open Outlook and try again."
         exit 1
     }
 
-    $profileRoot = "HKCU:\Software\Microsoft\Office\$versionKey\Outlook\Profiles"
-    $newProfilePath = Join-Path $profileRoot $ProfileName
+    # Get the namespace object (MAPI)
+    $namespace = $outlook.GetNamespace("MAPI")
 
-    if (-not (Test-Path $newProfilePath)) {
-        Write-Output "⚠️ Outlook profile '$ProfileName' not found under version $versionKey."
-        Write-Output "Existing profiles:"
-        Get-ChildItem $profileRoot -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName
-        exit 1
+    # Check if Outlook is offline
+    if ($namespace.Offline) {
+        Write-Output "🚫 Outlook is currently in **Offline Mode**."
     }
+    else {
+        # Try to detect account connection states (for multiple mailboxes)
+        $stores = $namespace.Stores
+        $connectedCount = 0
+        $disconnectedCount = 0
 
-    Write-Output "🔍 Searching registry for ConnectMode under profile '$ProfileName'..."
-
-    # Recursively search for ConnectMode key
-    $connectKeys = Get-ChildItem -Path $newProfilePath -Recurse -ErrorAction SilentlyContinue |
-                   ForEach-Object {
-                       try {
-                           Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue |
-                           Select-Object PSPath, ConnectMode
-                       } catch {}
-                   } | Where-Object { $_.ConnectMode -ne $null }
-
-    if ($connectKeys.Count -eq 0) {
-        Write-Output "⚠️ Could not find any ConnectMode value for profile '$ProfileName'."
-        Write-Output "Tip: Open Outlook once using this profile to initialize connection settings."
-        exit 0
-    }
-
-    # Show status for each ConnectMode found
-    foreach ($key in $connectKeys) {
-        $mode = $key.ConnectMode
-        switch ($mode) {
-            0 { $status = "🌐 Online Mode" }
-            1 { $status = "🗂️ Cached (Online with OST)" }
-            2 { $status = "🚫 Offline Mode" }
-            default { $status = "❓ Unknown Mode ($mode)" }
+        foreach ($store in $stores) {
+            try {
+                if ($store.IsDataFileStore -eq $false) {
+                    if ($store.ExchangeStoreType -ne $null) {
+                        if ($store.Connected) { $connectedCount++ } else { $disconnectedCount++ }
+                    }
+                }
+            } catch {}
         }
-        Write-Output "✅ Found ConnectMode = $mode → $status (Path: $($key.PSPath))"
+
+        if ($connectedCount -gt 0 -and $disconnectedCount -eq 0) {
+            Write-Output "🌐 Outlook is **Online and Connected** to the mail server."
+        }
+        elseif ($connectedCount -gt 0 -and $disconnectedCount -gt 0) {
+            Write-Output "⚠️ Outlook has **some accounts online and some offline.**"
+        }
+        else {
+            Write-Output "⚠️ Outlook appears **Disconnected** from the mail server."
+        }
     }
 }
 catch {
-    Write-Output "❌ Error checking Outlook mode: $_"
+    Write-Output "❌ Error checking Outlook status: $_"
 }
