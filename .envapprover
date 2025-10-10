@@ -1,0 +1,7 @@
+# replace values accordingly
+ORG=your-azure-devops-organization
+PROJECT=your-project-name
+REPO=your-repo-name
+PAT=your_personal_access_token_here
+SOURCE_BRANCH=main        # or 'master' — jisse se branch create karna hai
+LOCAL_PS_FILE=sample_script.ps1
