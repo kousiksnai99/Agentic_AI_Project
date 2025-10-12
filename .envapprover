@@ -54,20 +54,27 @@ BASE_URL = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}
 auth = HTTPBasicAuth(EMAIL, PAT)
 HEADERS = {"Content-Type": "application/json"}
 
-# 1️⃣ Check the branch ref
-response = requests.get(
-    f"{BASE_URL}/refs?filter=heads/{TARGET_BRANCH}&api-version={API_VERSION}",
-    auth=auth
-)
+# 1️⃣ Get the current commit of main branch
+ref_url = f"{BASE_URL}/refs?filter=heads/{TARGET_BRANCH}&api-version={API_VERSION}"
+response = requests.get(ref_url, auth=auth)
+
+print("🔹 GET refs URL:", ref_url)
+print("🔹 Status code:", response.status_code)
+print("🔹 Response:", response.text)
+
 if response.status_code != 200:
     print(f"❌ Failed to get branch refs: {response.status_code}")
-    print(response.text)
     exit(1)
 
-ref_main = response.json()
-old_object_id = ref_main["value"][0]["objectId"]
+ref_data = response.json()
+if "value" not in ref_data or len(ref_data["value"]) == 0:
+    print(f"❌ Branch '{TARGET_BRANCH}' not found in repo")
+    exit(1)
 
-# 2️⃣ Push local PS file to main branch
+old_object_id = ref_data["value"][0]["objectId"]
+print(f"✅ Found branch '{TARGET_BRANCH}', commit {old_object_id}")
+
+# 2️⃣ Push the PS file
 if not os.path.exists(LOCAL_PS_FILE):
     print(f"❌ Local file not found: {LOCAL_PS_FILE}")
     exit(1)
@@ -75,20 +82,18 @@ if not os.path.exists(LOCAL_PS_FILE):
 with open(LOCAL_PS_FILE, "r", encoding="utf-8") as f:
     content = f.read()
 
-response = requests.post(
-    f"{BASE_URL}/pushes?api-version={API_VERSION}",
-    json={
-        "refUpdates": [{"name": f"refs/heads/{TARGET_BRANCH}", "oldObjectId": old_object_id}],
-        "commits": [{
-            "comment": f"Add {LOCAL_PS_FILE}",
-            "changes": [{"changeType": "add", "item": {"path": "/" + LOCAL_PS_FILE}, "newContent": {"content": content, "contentType": "rawtext"}}]
-        }]
-    },
-    auth=auth,
-    headers=HEADERS
-)
+push_url = f"{BASE_URL}/pushes?api-version={API_VERSION}"
+payload = {
+    "refUpdates": [{"name": f"refs/heads/{TARGET_BRANCH}", "oldObjectId": old_object_id}],
+    "commits": [{
+        "comment": f"Add {LOCAL_PS_FILE}",
+        "changes": [{"changeType": "add", "item": {"path": "/" + LOCAL_PS_FILE}, "newContent": {"content": content, "contentType": "rawtext"}}]
+    }]
+}
 
-if response.status_code != 201:
+response = requests.post(push_url, json=payload, auth=auth, headers=HEADERS)
+
+if response.status_code not in [200, 201]:
     print(f"❌ Failed to push file: {response.status_code}")
     print(response.text)
     exit(1)
