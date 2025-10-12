@@ -12,16 +12,17 @@ LOCAL_PS_FILE=sample_script.ps1
 import requests
 from requests.auth import HTTPBasicAuth
 
-ORG = "Teva-CCOE"
-PROJECT = "ITOA-Agentic-AI-PROJECT"
-REPO = "ITOA-Agentic-AI-PROJECT"
-EMAIL = "your_email@company.com"
-PAT = "azdXXXXXXXXXXXX"
+# HARDCODED CONFIG
+EMAIL = "your_email@company.com"   # Azure DevOps login email
+PAT = "azdXXXXXXXXXXXX"            # PAT with Code Read & Write
 
-url = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}/refs?filter=heads/main&api-version=7.1"
+# Correct repo URL
+REFS_URL = "https://dev.azure.com/Teva-CCOE/ITOA-Agentic-AI-PROJECT/_apis/git/repositories/ITOA-Agentic-AI-PROJECT/refs?filter=heads/main&api-version=7.1"
 
 auth = HTTPBasicAuth(EMAIL, PAT)
 
-r = requests.get(url, auth=auth)
-print(r.status_code)
-print(r.text)
+print("🔹 Testing GET refs for main branch...")
+r = requests.get(REFS_URL, auth=auth)
+
+print("Status code:", r.status_code)
+print("Response:", r.text)
