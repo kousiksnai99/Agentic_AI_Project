@@ -9,28 +9,29 @@ commit_ps.py
 import os
 import sys
 import uuid
-import json
 import requests
 from requests.auth import HTTPBasicAuth
 
-# ===== HARD-CODED CONFIG =====
+# ===== HARDCODED CONFIG =====
 ORG = "Teva-CCOE"
 PROJECT = "ITOA-Agentic-AI-PROJECT"
 REPO = "ITOA-Agentic-AI-PROJECT"
-EMAIL = "your_email@company.com"        # <-- replace with your Azure DevOps login email
-PAT = "azdXXXXXXXXXXXXXX"               # <-- replace with your PAT
+EMAIL = "your_email@company.com"    # <-- Replace with your Azure DevOps email
+PAT = "azdXXXXXXXXXXXXXX"           # <-- Replace with your PAT
 SOURCE_BRANCH = "main"
-LOCAL_PS_FILE = "sample_script.ps1"    # local PS1 file path
-
+LOCAL_PS_FILE = "sample_script.ps1"  # Local PS1 file path
 API_VERSION = "7.1"
+
+# Auth & headers
+auth = HTTPBasicAuth(EMAIL, PAT)
 HEADERS = {"Content-Type": "application/json"}
 
-# BASE URL for repo API calls
-BASE_URL = f"url_refs = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}/refs?filter=heads/{branch_name}&api-version=7.1"
-auth = HTTPBasicAuth(EMAIL, PAT)
+# Base repo URL
+BASE_URL = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}"
+
 
 def get_ref_for_branch(branch_name):
-    """Return ref object for a branch (or None). branch_name: e.g. 'main'"""
+    """Return branch ref object or None"""
     url = f"{BASE_URL}/refs?filter=heads/{branch_name}&api-version={API_VERSION}"
     r = requests.get(url, auth=auth)
     r.raise_for_status()
@@ -39,12 +40,14 @@ def get_ref_for_branch(branch_name):
         return data["value"][0]
     return None
 
+
 def create_branch_from(source_branch, new_branch):
-    """Create refs/heads/{new_branch} pointing to source_branch's commit"""
+    """Create new branch from source_branch"""
     source_ref = get_ref_for_branch(source_branch)
     if not source_ref:
-        raise RuntimeError(f"Source branch '{source_branch}' not found in repo.")
+        raise RuntimeError(f"Source branch '{source_branch}' not found.")
     commit_id = source_ref["objectId"]
+
     body = [
         {
             "name": f"refs/heads/{new_branch}",
@@ -55,11 +58,12 @@ def create_branch_from(source_branch, new_branch):
     url = f"{BASE_URL}/refs?api-version={API_VERSION}"
     r = requests.post(url, json=body, auth=auth, headers=HEADERS)
     r.raise_for_status()
-    print(f"✅ Branch created: refs/heads/{new_branch}")
+    print(f"✅ Branch created: {new_branch}")
     return r.json()
 
+
 def push_file_to_branch(branch_name, local_file_path, repo_target_path):
-    """Push a file into the branch at repo_target_path (e.g. scripts/foo.ps1)"""
+    """Push local PS1 file to branch"""
     if not os.path.exists(local_file_path):
         raise RuntimeError(f"Local file not found: {local_file_path}")
 
@@ -83,10 +87,7 @@ def push_file_to_branch(branch_name, local_file_path, repo_target_path):
                     {
                         "changeType": "add",
                         "item": {"path": "/" + repo_target_path},
-                        "newContent": {
-                            "content": content,
-                            "contentType": "rawtext"
-                        }
+                        "newContent": {"content": content, "contentType": "rawtext"}
                     }
                 ]
             }
@@ -94,11 +95,12 @@ def push_file_to_branch(branch_name, local_file_path, repo_target_path):
     }
     r = requests.post(url, json=body, auth=auth, headers=HEADERS)
     r.raise_for_status()
-    print(f"✅ File pushed to branch 'refs/heads/{branch_name}' at path '/{repo_target_path}'")
+    print(f"✅ File pushed to branch '{branch_name}' at '/{repo_target_path}'")
     return r.json()
 
+
 def create_pull_request(source_branch, target_branch, title, description, reviewers=None):
-    """Create PR from refs/heads/{source_branch} -> refs/heads/{target_branch}"""
+    """Create PR from source_branch -> target_branch"""
     url = f"{BASE_URL}/pullrequests?api-version={API_VERSION}"
     body = {
         "sourceRefName": f"refs/heads/{source_branch}",
@@ -108,6 +110,7 @@ def create_pull_request(source_branch, target_branch, title, description, review
     }
     if reviewers:
         body["reviewers"] = [{"uniqueName": r} for r in reviewers]
+
     r = requests.post(url, json=body, auth=auth, headers=HEADERS)
     r.raise_for_status()
     pr = r.json()
@@ -118,32 +121,33 @@ def create_pull_request(source_branch, target_branch, title, description, review
         print(f"🔗 PR URL: {pr_url}")
     return pr
 
+
 def main():
-    # generate branch name
+    # Generate a unique branch name
     short = uuid.uuid4().hex[:8]
     new_branch = f"agentic-{short}"
 
-    # 1) create branch from SOURCE_BRANCH
+    # 1) Create branch
     create_branch_from(SOURCE_BRANCH, new_branch)
 
-    # 2) push the local PS file into repository under scripts/<filename>
+    # 2) Push PS script
     filename = os.path.basename(LOCAL_PS_FILE)
     repo_path = f"scripts/{filename}"
     push_file_to_branch(new_branch, LOCAL_PS_FILE, repo_path)
 
-    # 3) create PR (open) -> reviewer option
-    print("\nDo you want to add reviewers to the PR? (enter comma-separated emails/uniqueNames, or leave blank)")
+    # 3) Create PR (open) with optional reviewers
+    print("\nEnter reviewers (comma-separated emails/uniqueNames) or leave blank:")
     rev_input = input("Reviewers: ").strip()
     reviewers = [r.strip() for r in rev_input.split(",")] if rev_input else None
 
     title = f"Auto PR: add {filename} (branch {new_branch})"
     description = "Auto-created PR: add PowerShell script. Merge after approval."
 
-    pr = create_pull_request(new_branch, SOURCE_BRANCH, title, description, reviewers=reviewers)
+    create_pull_request(new_branch, SOURCE_BRANCH, title, description, reviewers)
 
     print("\n🎯 Done — PR is OPEN and waiting for approval.")
-    print("Reminder: The file and changes are only in the new branch until PR is approved & merged.")
-    print("To approve & merge, use Azure DevOps UI or call the approval/complete API (not performed by this script).")
+    print("Reminder: changes are only in the new branch until PR is approved & merged.")
+
 
 if __name__ == "__main__":
     try:
