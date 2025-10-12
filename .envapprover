@@ -33,3 +33,82 @@ else:
     print(f"❌ Authentication failed: {response.status_code}")
     print(response.text)
 
+
+
+#!/usr/bin/env python3
+import os
+import uuid
+import requests
+from requests.auth import HTTPBasicAuth
+
+# ===== HARDCODED CONFIG =====
+ORG = "Teva-CCOE"
+PROJECT = "ITOA-Agentic-AI-PROJECT"
+REPO = "ITOA-Agentic-AI-PROJECT"
+EMAIL = "your_email@company.com"    # <-- replace with your Azure DevOps login email
+PAT = "azdXXXXXXXXXXXXXX"           # <-- replace with your PAT
+SOURCE_BRANCH = "main"
+
+LOCAL_PS_FILE = "sample_script.ps1"  # Make sure this exists
+
+API_VERSION = "7.1"
+BASE_URL = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}"
+auth = HTTPBasicAuth(EMAIL, PAT)
+HEADERS = {"Content-Type": "application/json"}
+
+# Generate a random branch name
+new_branch = f"demo-{uuid.uuid4().hex[:6]}"
+
+# 1️⃣ Create new branch from main
+ref_main = requests.get(
+    f"{BASE_URL}/refs?filter=heads/{SOURCE_BRANCH}&api-version={API_VERSION}",
+    auth=auth
+).json()
+commit_id = ref_main["value"][0]["objectId"]
+
+requests.post(
+    f"{BASE_URL}/refs?api-version={API_VERSION}",
+    json=[{
+        "name": f"refs/heads/{new_branch}",
+        "oldObjectId": "0000000000000000000000000000000000000000",
+        "newObjectId": commit_id
+    }],
+    auth=auth,
+    headers=HEADERS
+)
+print(f"✅ Branch created: {new_branch}")
+
+# 2️⃣ Push local PS file
+with open(LOCAL_PS_FILE, "r", encoding="utf-8") as f:
+    content = f.read()
+
+ref_new = requests.get(f"{BASE_URL}/refs?filter=heads/{new_branch}&api-version={API_VERSION}", auth=auth).json()
+old_object_id = ref_new["value"][0]["objectId"]
+
+requests.post(
+    f"{BASE_URL}/pushes?api-version={API_VERSION}",
+    json={
+        "refUpdates": [{"name": f"refs/heads/{new_branch}", "oldObjectId": old_object_id}],
+        "commits": [{
+            "comment": f"Add {LOCAL_PS_FILE}",
+            "changes": [{"changeType": "add", "item": {"path": "/" + LOCAL_PS_FILE}, "newContent": {"content": content, "contentType": "rawtext"}}]
+        }]
+    },
+    auth=auth,
+    headers=HEADERS
+)
+print(f"✅ File pushed to branch {new_branch}")
+
+# 3️⃣ Create open PR
+pr = requests.post(
+    f"{BASE_URL}/pullrequests?api-version={API_VERSION}",
+    json={
+        "sourceRefName": f"refs/heads/{new_branch}",
+        "targetRefName": f"refs/heads/{SOURCE_BRANCH}",
+        "title": f"Demo PR: add {LOCAL_PS_FILE}",
+        "description": "Demo PR for manager review"
+    },
+    auth=auth,
+    headers=HEADERS
+).json()
+print(f"✅ Pull Request created: ID {pr['pullRequestId']}, URL: {pr['_links']['web']['href']}")
