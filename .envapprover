@@ -17,8 +17,7 @@ EMAIL = "your_email@company.com"   # Azure DevOps login email
 PAT = "azdXXXXXXXXXXXX"            # PAT with Code Read & Write
 
 # Correct repo URL
-REFS_URL = "https://dev.azure.com/Teva-CCOE/ITOA-Agentic-AI-PROJECT/_apis/git/repositories/ITOA-Agentic-AI-PROJECT/refs?filter=heads/main&api-version=7.1"
-
+REFS_URL = "https://dev.azure.com/Teva-CCOE/_apis/git/repositories/ITOA-Agentic-AI-PROJECT/refs?filter=heads/main&api-version=7.1"
 auth = HTTPBasicAuth(EMAIL, PAT)
 
 print("🔹 Testing GET refs for main branch...")
