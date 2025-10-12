@@ -12,9 +12,24 @@ LOCAL_PS_FILE=sample_script.ps1
 import requests
 from requests.auth import HTTPBasicAuth
 
-url = "https://dev.azure.com/Teva-CCOE/_apis/projects?api-version=7.1"
-auth = HTTPBasicAuth('your_email@domain.com', 'your_pat_here')
+# ===== HARD-CODED CONFIG =====
+ORG = "Teva-CCOE"
+EMAIL = "your_email@company.com"   # <-- replace with your Azure DevOps login email
+PAT = "azdXXXXXXXXXXXXXX"          # <-- replace with your PAT
 
-r = requests.get(url, auth=auth)
-print(r.status_code)
-print(r.text)
+# Use the Projects API to test access
+url = f"https://dev.azure.com/{ORG}/_apis/projects?api-version=7.1"
+
+# Auth (use your email instead of empty username)
+auth = HTTPBasicAuth(EMAIL, PAT)
+
+print(f"🔹 Testing Azure DevOps authentication for org: {ORG}")
+response = requests.get(url, auth=auth)
+
+if response.status_code == 200:
+    print("✅ Authentication successful!")
+    print(response.json())
+else:
+    print(f"❌ Authentication failed: {response.status_code}")
+    print(response.text)
+
