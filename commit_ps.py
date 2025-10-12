@@ -11,31 +11,23 @@ import sys
 import uuid
 import json
 import requests
-from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 
-load_dotenv()
-
-# ===== CONFIG (from .env) =====
-ORG = os.getenv("ORG")
-PROJECT = os.getenv("PROJECT")
-REPO = os.getenv("REPO")
-PAT = os.getenv("PAT")
-SOURCE_BRANCH = os.getenv("SOURCE_BRANCH", "main")  # default 'main'
-LOCAL_PS_FILE = os.getenv("LOCAL_PS_FILE", "sample_script.ps1")
+# ===== HARD-CODED CONFIG =====
+ORG = "Teva-CCOE"
+PROJECT = "ITOA-Agentic-AI-PROJECT"
+REPO = "ITOA-Agentic-AI-PROJECT"
+EMAIL = "your_email@company.com"        # <-- replace with your Azure DevOps login email
+PAT = "azdXXXXXXXXXXXXXX"               # <-- replace with your PAT
+SOURCE_BRANCH = "main"
+LOCAL_PS_FILE = "sample_script.ps1"    # local PS1 file path
 
 API_VERSION = "7.1"
-
-# sanity checks
-for var, name in [(ORG, "ORG"), (PROJECT, "PROJECT"), (REPO, "REPO"), (PAT, "PAT")]:
-    if not var:
-        print(f"ERROR: Missing {name} in .env")
-        sys.exit(1)
-
-BASE_URL = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}"
-auth = HTTPBasicAuth('', PAT)   # username empty, PAT as password
-
 HEADERS = {"Content-Type": "application/json"}
+
+# BASE URL for repo API calls
+BASE_URL = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}"
+auth = HTTPBasicAuth(EMAIL, PAT)
 
 def get_ref_for_branch(branch_name):
     """Return ref object for a branch (or None). branch_name: e.g. 'main'"""
@@ -74,7 +66,6 @@ def push_file_to_branch(branch_name, local_file_path, repo_target_path):
     with open(local_file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Get current commit (oldObjectId) of branch
     ref = get_ref_for_branch(branch_name)
     if not ref:
         raise RuntimeError(f"Branch '{branch_name}' not found for push.")
@@ -90,7 +81,7 @@ def push_file_to_branch(branch_name, local_file_path, repo_target_path):
                 "comment": f"Add {repo_target_path}",
                 "changes": [
                     {
-                        "changeType": "add",   # if file exists, changeType could be "edit"
+                        "changeType": "add",
                         "item": {"path": "/" + repo_target_path},
                         "newContent": {
                             "content": content,
@@ -116,7 +107,6 @@ def create_pull_request(source_branch, target_branch, title, description, review
         "description": description
     }
     if reviewers:
-        # reviewers can be provided as list of emails/uniqueNames
         body["reviewers"] = [{"uniqueName": r} for r in reviewers]
     r = requests.post(url, json=body, auth=auth, headers=HEADERS)
     r.raise_for_status()
