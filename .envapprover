@@ -37,7 +37,6 @@ else:
 
 #!/usr/bin/env python3
 import os
-import uuid
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -47,7 +46,7 @@ PROJECT = "ITOA-Agentic-AI-PROJECT"
 REPO = "ITOA-Agentic-AI-PROJECT"
 EMAIL = "your_email@company.com"    # <-- replace with your Azure DevOps login email
 PAT = "azdXXXXXXXXXXXXXX"           # <-- replace with your PAT
-SOURCE_BRANCH = "main"
+TARGET_BRANCH = "main"
 LOCAL_PS_FILE = "sample_script.ps1"  # Make sure this exists
 
 API_VERSION = "7.1"
@@ -55,12 +54,9 @@ BASE_URL = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}
 auth = HTTPBasicAuth(EMAIL, PAT)
 HEADERS = {"Content-Type": "application/json"}
 
-# Generate a random branch name
-new_branch = f"demo-{uuid.uuid4().hex[:6]}"
-
-# 1️⃣ Create new branch from main
+# 1️⃣ Check the branch ref
 response = requests.get(
-    f"{BASE_URL}/refs?filter=heads/{SOURCE_BRANCH}&api-version={API_VERSION}",
+    f"{BASE_URL}/refs?filter=heads/{TARGET_BRANCH}&api-version={API_VERSION}",
     auth=auth
 )
 if response.status_code != 200:
@@ -69,27 +65,9 @@ if response.status_code != 200:
     exit(1)
 
 ref_main = response.json()
-commit_id = ref_main["value"][0]["objectId"]
+old_object_id = ref_main["value"][0]["objectId"]
 
-# Create branch
-response = requests.post(
-    f"{BASE_URL}/refs?api-version={API_VERSION}",
-    json=[{
-        "name": f"refs/heads/{new_branch}",
-        "oldObjectId": "0000000000000000000000000000000000000000",
-        "newObjectId": commit_id
-    }],
-    auth=auth,
-    headers=HEADERS
-)
-if response.status_code != 200:
-    print(f"❌ Failed to create branch: {response.status_code}")
-    print(response.text)
-    exit(1)
-
-print(f"✅ Branch created: {new_branch}")
-
-# 2️⃣ Push local PS file
+# 2️⃣ Push local PS file to main branch
 if not os.path.exists(LOCAL_PS_FILE):
     print(f"❌ Local file not found: {LOCAL_PS_FILE}")
     exit(1)
@@ -97,22 +75,10 @@ if not os.path.exists(LOCAL_PS_FILE):
 with open(LOCAL_PS_FILE, "r", encoding="utf-8") as f:
     content = f.read()
 
-response = requests.get(
-    f"{BASE_URL}/refs?filter=heads/{new_branch}&api-version={API_VERSION}",
-    auth=auth
-)
-if response.status_code != 200:
-    print(f"❌ Failed to get new branch ref: {response.status_code}")
-    print(response.text)
-    exit(1)
-
-ref_new = response.json()
-old_object_id = ref_new["value"][0]["objectId"]
-
 response = requests.post(
     f"{BASE_URL}/pushes?api-version={API_VERSION}",
     json={
-        "refUpdates": [{"name": f"refs/heads/{new_branch}", "oldObjectId": old_object_id}],
+        "refUpdates": [{"name": f"refs/heads/{TARGET_BRANCH}", "oldObjectId": old_object_id}],
         "commits": [{
             "comment": f"Add {LOCAL_PS_FILE}",
             "changes": [{"changeType": "add", "item": {"path": "/" + LOCAL_PS_FILE}, "newContent": {"content": content, "contentType": "rawtext"}}]
@@ -121,29 +87,10 @@ response = requests.post(
     auth=auth,
     headers=HEADERS
 )
+
 if response.status_code != 201:
     print(f"❌ Failed to push file: {response.status_code}")
     print(response.text)
     exit(1)
 
-print(f"✅ File pushed to branch {new_branch}")
-
-# 3️⃣ Create open PR
-response = requests.post(
-    f"{BASE_URL}/pullrequests?api-version={API_VERSION}",
-    json={
-        "sourceRefName": f"refs/heads/{new_branch}",
-        "targetRefName": f"refs/heads/{SOURCE_BRANCH}",
-        "title": f"Demo PR: add {LOCAL_PS_FILE}",
-        "description": "Demo PR for manager review"
-    },
-    auth=auth,
-    headers=HEADERS
-)
-if response.status_code != 201:
-    print(f"❌ Failed to create PR: {response.status_code}")
-    print(response.text)
-    exit(1)
-
-pr = response.json()
-print(f"✅ Pull Request created: ID {pr['pullRequestId']}, URL: {pr['_links']['web']['href']}")
+print(f"✅ File '{LOCAL_PS_FILE}' successfully pushed to branch '{TARGET_BRANCH}'!")
