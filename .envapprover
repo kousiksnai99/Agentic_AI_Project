@@ -5,3 +5,16 @@ REPO=your-repo-name
 PAT=your_personal_access_token_here
 SOURCE_BRANCH=main        # or 'master' — jisse se branch create karna hai
 LOCAL_PS_FILE=sample_script.ps1
+
+
+
+
+import requests
+from requests.auth import HTTPBasicAuth
+
+url = "https://dev.azure.com/Teva-CCOE/_apis/projects?api-version=7.1"
+auth = HTTPBasicAuth('your_email@domain.com', 'your_pat_here')
+
+r = requests.get(url, auth=auth)
+print(r.status_code)
+print(r.text)
