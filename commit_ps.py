@@ -26,7 +26,7 @@ API_VERSION = "7.1"
 HEADERS = {"Content-Type": "application/json"}
 
 # BASE URL for repo API calls
-BASE_URL = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}"
+BASE_URL = f"url_refs = f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/git/repositories/{REPO}/refs?filter=heads/{branch_name}&api-version=7.1"
 auth = HTTPBasicAuth(EMAIL, PAT)
 
 def get_ref_for_branch(branch_name):
