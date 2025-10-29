@@ -1,3 +1,74 @@
+from azure.ai.projects import AIProjectClient
+from azure.identity import AzureCliCredential
+from azure.ai.agents.models import ListSortOrder
+
+# ---------------------------------------
+# Initialize Project and Agent
+# ---------------------------------------
+project = AIProjectClient(
+    credential=AzureCliCredential(),
+    endpoint="https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc"
+)
+
+agent = project.agents.get_agent("asst_PJGp1mw7VNLpG0Uwy6ZU7mMW")
+
+# Create a thread (conversation session)
+thread = project.agents.threads.create()
+print(f"✅ Connected. Conversation thread created: {thread.id}")
+print("💬 You can now chat with your agent. Type 'exit' to quit.\n")
+
+
+def chat_with_agent(user_message: str):
+    """Send user message to Azure Agent and return response."""
+    # Send user message
+    project.agents.messages.create(
+        thread_id=thread.id,
+        role="user",
+        content=user_message
+    )
+
+    # Trigger agent processing
+    run = project.agents.runs.create_and_process(
+        thread_id=thread.id,
+        agent_id=agent.id
+    )
+
+    if run.status == "failed":
+        return f"❌ Agent run failed: {run.last_error}"
+
+    # Retrieve messages
+    messages = list(project.agents.messages.list(
+        thread_id=thread.id,
+        order=ListSortOrder.ASCENDING
+    ))
+
+    # Return the latest assistant response
+    for message in reversed(messages):
+        if message.role == "assistant" and message.text_messages:
+            return message.text_messages[-1].text.value
+
+    return "⚠ No response received from agent."
+
+
+# ---------------------------------------
+# Chat Loop in Terminal
+# ---------------------------------------
+try:
+    while True:
+        user_input = input("You: ").strip()
+        if user_input.lower() in ["exit", "quit"]:
+            print("👋 Ending chat session. Goodbye!")
+            break
+
+        response = chat_with_agent(user_input)
+        print(f"Agent: {response}\n")
+
+except KeyboardInterrupt:
+    print("\n👋 Chat session interrupted. Goodbye!")
+
+
+
+
 # =========================================
 
 # Problem 1: Create OST Profile
