@@ -8,79 +8,46 @@ LOCAL_PS_FILE=sample_script.ps1
 
 
 from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential, AzureCliCredential
-from azure.ai.agents.models import ListSortOrder
- 
-project = AIProjectClient(
-    credential=AzureCliCredential(),
-    endpoint="https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc")
- 
-agent = project.agents.get_agent("asst_PJGp1mw7VNLpG0Uwy6ZU7mMW")
- 
-thread = project.agents.threads.create()
-print(f"Created thread, ID: {thread.id}")
- 
-message = project.agents.messages.create(
-    thread_id=thread.id,
-    role="user",
-    content="Hi Agent504"
-)
- 
-run = project.agents.runs.create_and_process(
-    thread_id=thread.id,
-    agent_id=agent.id)
- 
-if run.status == "failed":
-    print(f"Run failed: {run.last_error}")
-else:
-    messages = project.agents.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
- 
-    for message in messages:
-        if message.text_messages:
-            print(f"{message.role}: {message.text_messages[-1].text.value}")
-
-import os
-from datetime import datetime
-from azure.ai.projects import AIProjectClient
-from azure.identity import EnvironmentCredential, ClientSecretCredential
+from azure.identity import AzureCliCredential
 from azure.ai.agents.models import ListSortOrder
 from azure.mgmt.automation import AutomationClient
+from datetime import datetime
 
 # -------------------------------
-# Azure Credentials
+# Azure Configurations
 # -------------------------------
-os.environ["AZURE_CLIENT_ID"] = "bb460f8c-c109-4d44-b23a-ce871a084b88"
-os.environ["AZURE_CLIENT_SECRET"] = ""
-os.environ["AZURE_TENANT_ID"] = "20836017-2c5d-4091-8854-44e135760155"
-
 AZURE_SUBSCRIPTION_ID = "5e31a9fe-8582-4f44-abd5-0a925d25c818"
 AZURE_RESOURCE_GROUP = "aoairg"
 AUTOMATION_ACCOUNT = "automationagent"
+PROJECT_ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc"
+AGENT_ID = "asst_PJGp1mw7VNLpG0Uwy6ZU7mMW"   # Your agent ID from first code
 
 # -------------------------------
-# Initialize Clients
+# Credentials (NO tenant/client needed)
 # -------------------------------
-project_endpoint = "https://helpdeskassistants.services.ai.azure.com/api/projects/helpdesk_assistants"
-credential_env = EnvironmentCredential()
-project_client = AIProjectClient(credential=credential_env, endpoint=project_endpoint)
+credential = AzureCliCredential()
 
-credential_automation = ClientSecretCredential(
-    tenant_id=os.environ["AZURE_TENANT_ID"],
-    client_id=os.environ["AZURE_CLIENT_ID"],
-    client_secret=os.environ["AZURE_CLIENT_SECRET"]
+# Project Client using CLI Auth
+project = AIProjectClient(
+    credential=credential,
+    endpoint=PROJECT_ENDPOINT
 )
-automation_client = AutomationClient(credential_automation, AZURE_SUBSCRIPTION_ID)
+
+# Automation Client using CLI Auth
+automation_client = AutomationClient(
+    credential=credential,
+    subscription_id=AZURE_SUBSCRIPTION_ID
+)
 
 # -------------------------------
-# Select Agent
+# Load the Agent
 # -------------------------------
-agent_id = "asst_5Uvfmvh9tguFEacF9iKsYM1L"
-agent = project_client.agents.get_agent(agent_id)
+agent = project.agents.get_agent(AGENT_ID)
 
 # -------------------------------
 # Create a thread
 # -------------------------------
-thread = project_client.agents.threads.create()
+thread = project.agents.threads.create()
 print(f"Created thread, ID: {thread.id}")
 
 # -------------------------------
@@ -88,21 +55,18 @@ print(f"Created thread, ID: {thread.id}")
 # -------------------------------
 def execute_runbook(runbook_name):
     try:
-        # Validate if runbook exists
         runbooks = automation_client.runbook.list_by_automation_account(
             AZURE_RESOURCE_GROUP, AUTOMATION_ACCOUNT
         )
         available = [rb.name for rb in runbooks]
 
         if runbook_name not in available:
-            return f"Runbook '{runbook_name}' not found in Azure Automation."
+            return f"Runbook '{runbook_name}' not found."
 
-        # Create a job for the runbook
         job_name = f"job_{runbook_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
         job_params = {
             "runbook": {"name": runbook_name},
-            "parameters": {},  # Add parameters if extracted by agent
+            "parameters": {}
         }
 
         job = automation_client.job.create(
@@ -111,23 +75,21 @@ def execute_runbook(runbook_name):
             job_name,
             job_params
         )
-
-        return f"Runbook '{runbook_name}' started successfully.\nJob ID: {job.job_id}"
-
+        return f"✅ Runbook '{runbook_name}' started successfully. Job ID: {job.job_id}"
     except Exception as e:
-        return f"Failed to start runbook '{runbook_name}': {str(e)}"
+        return f"❌ Failed to start runbook '{runbook_name}': {str(e)}"
 
 # -------------------------------
 # Function: Chat with Agent
 # -------------------------------
 def chat_with_agent(user_input):
-    project_client.agents.messages.create(
+    project.agents.messages.create(
         thread_id=thread.id,
         role="user",
         content=user_input
     )
 
-    run = project_client.agents.runs.create_and_process(
+    run = project.agents.runs.create_and_process(
         thread_id=thread.id,
         agent_id=agent.id
     )
@@ -135,37 +97,26 @@ def chat_with_agent(user_input):
     if run.status == "failed":
         return f"Run failed: {run.last_error}"
 
-    messages = list(project_client.agents.messages.list(
-        thread_id=thread.id,
-        order=ListSortOrder.ASCENDING
-    ))
+    messages = list(project.agents.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING))
 
     for message in reversed(messages):
         if message.role == "assistant" and message.text_messages:
             response_text = message.text_messages[-1].text.value
-            # Try to extract runbook name from agent's response
-            words = response_text.split()
-            for w in words:
-                if any(keyword.lower() in w.lower() for keyword in ["Azure_", "Fix-", "Tutorial"]):
-                    runbook_name = w.strip().replace(",", "")
+            # Simple keyword-based runbook extraction
+            for keyword in response_text.split():
+                if keyword.startswith("Azure_") or keyword.startswith("Fix-"):
+                    runbook_name = keyword.strip(",.")
                     runbook_result = execute_runbook(runbook_name)
                     return f"{response_text}\n\n{runbook_result}"
             return response_text
 
-    return "No response from agent."
-
 # -------------------------------
-# Interactive Chat Loop
+# Chat Loop
 # -------------------------------
-print("Chat with RunbookIdentifierAgent_gpt4o. Type 'exit' or Ctrl+C to quit.")
-
-try:
-    while True:
-        user_input = input("You: ").strip()
-        if user_input.lower() == "exit":
-            print("Exiting chat...")
-            break
-        response = chat_with_agent(user_input)
-        print(f"Agent: {response}")
-except KeyboardInterrupt:
-    print("\nChat interrupted. Exiting gracefully...")
+print("Chat with your agent. Type 'exit' to quit.")
+while True:
+    user_input = input("You: ").strip()
+    if user_input.lower() == "exit":
+        break
+    response = chat_with_agent(user_input)
+    print(f"Agent: {response}")
