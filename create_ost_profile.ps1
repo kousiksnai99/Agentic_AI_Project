@@ -1,33 +1,85 @@
 from azure.ai.projects import AIProjectClient
 from azure.identity import AzureCliCredential
 from azure.ai.agents.models import ListSortOrder
+from azure.mgmt.automation import AutomationClient
+from datetime import datetime
 
 # ---------------------------------------
-# Initialize Project and Agent
+# Configuration (Update if needed)
 # ---------------------------------------
+PROJECT_ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc"
+AGENT_ID = "asst_PJGp1mw7VNLpG0Uwy6ZU7mMW"
+
+AZURE_SUBSCRIPTION_ID = "5e31a9fe-8582-4f44-abd5-0a925d25c818"
+AZURE_RESOURCE_GROUP = "aoairg"
+AUTOMATION_ACCOUNT = "automationagent"
+
+# ---------------------------------------
+# Authenticate using Azure CLI
+# ---------------------------------------
+credential = AzureCliCredential()
+
+# Azure AI agent client
 project = AIProjectClient(
-    credential=AzureCliCredential(),
-    endpoint="https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc"
+    credential=credential,
+    endpoint=PROJECT_ENDPOINT
 )
 
-agent = project.agents.get_agent("asst_PJGp1mw7VNLpG0Uwy6ZU7mMW")
+# Azure Automation client
+automation_client = AutomationClient(
+    credential=credential,
+    subscription_id=AZURE_SUBSCRIPTION_ID
+)
 
-# Create a thread (conversation session)
+# Load the agent and start a new chat thread
+agent = project.agents.get_agent(AGENT_ID)
 thread = project.agents.threads.create()
-print(f"✅ Connected. Conversation thread created: {thread.id}")
-print("💬 You can now chat with your agent. Type 'exit' to quit.\n")
+print(f"✅ Connected to agent. Thread created: {thread.id}")
+print("💬 Start chatting. Type 'exit' to quit.\n")
 
 
-def chat_with_agent(user_message: str):
-    """Send user message to Azure Agent and return response."""
-    # Send user message
+# ---------------------------------------
+# Function: Execute Runbook
+# ---------------------------------------
+def execute_runbook(runbook_name):
+    try:
+        print(f"⚙ Attempting to start runbook: {runbook_name} ...")
+        runbooks = automation_client.runbook.list_by_automation_account(
+            AZURE_RESOURCE_GROUP, AUTOMATION_ACCOUNT
+        )
+        available = [rb.name for rb in runbooks]
+
+        if runbook_name not in available:
+            return f"❌ Runbook '{runbook_name}' not found in Azure Automation."
+
+        job_name = f"job_{runbook_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        job_params = {
+            "runbook": {"name": runbook_name},
+            "parameters": {}  # Customize if runbook needs parameters
+        }
+
+        job = automation_client.job.create(
+            AZURE_RESOURCE_GROUP,
+            AUTOMATION_ACCOUNT,
+            job_name,
+            job_params
+        )
+
+        return f"✅ Runbook '{runbook_name}' started successfully.\n🔎 Job ID: {job.job_id}"
+    except Exception as e:
+        return f"❌ Error executing runbook '{runbook_name}': {str(e)}"
+
+
+# ---------------------------------------
+# Function: Send message to agent
+# ---------------------------------------
+def chat_with_agent(user_input):
     project.agents.messages.create(
         thread_id=thread.id,
         role="user",
-        content=user_message
+        content=user_input
     )
 
-    # Trigger agent processing
     run = project.agents.runs.create_and_process(
         thread_id=thread.id,
         agent_id=agent.id
@@ -36,35 +88,43 @@ def chat_with_agent(user_message: str):
     if run.status == "failed":
         return f"❌ Agent run failed: {run.last_error}"
 
-    # Retrieve messages
     messages = list(project.agents.messages.list(
         thread_id=thread.id,
         order=ListSortOrder.ASCENDING
     ))
 
-    # Return the latest assistant response
+    # Process last response from agent
     for message in reversed(messages):
         if message.role == "assistant" and message.text_messages:
-            return message.text_messages[-1].text.value
+            response_text = message.text_messages[-1].text.value
 
-    return "⚠ No response received from agent."
+            # Try to detect runbook keyword in response
+            for word in response_text.split():
+                if word.startswith(("Azure_", "Fix_", "Runbook_")):
+                    runbook_name = word.replace(",", "").strip()
+                    runbook_result = execute_runbook(runbook_name)
+                    return f"{response_text}\n\n{runbook_result}"
+
+            return response_text
+
+    return "⚠ No response from agent."
 
 
 # ---------------------------------------
-# Chat Loop in Terminal
+# Chat Loop
 # ---------------------------------------
 try:
     while True:
         user_input = input("You: ").strip()
         if user_input.lower() in ["exit", "quit"]:
-            print("👋 Ending chat session. Goodbye!")
+            print("👋 Exiting chat. Goodbye!")
             break
 
         response = chat_with_agent(user_input)
         print(f"Agent: {response}\n")
 
 except KeyboardInterrupt:
-    print("\n👋 Chat session interrupted. Goodbye!")
+    print("\n👋 Chat interrupted. Goodbye!")
 
 
 
