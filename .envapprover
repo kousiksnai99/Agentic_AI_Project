@@ -1,3 +1,8 @@
+If an issue is found:
+Start with “Issue Found”, then describe the issue briefly, and after that provide the Conclusion.
+If no issue is found:
+Start with “No Action Required”, then provide the Conclusion explaining why everything is okay.
+
 # replace values accordingly
 ORG=your-azure-devops-organization
 PROJECT=your-project-name
