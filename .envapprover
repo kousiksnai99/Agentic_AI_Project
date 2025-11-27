@@ -1,13 +1,9 @@
 import time
 from openai import AzureOpenAI
 
-# ------------------------------
-# Direct LLM Call
-# ------------------------------
-
 endpoint = "https://aifoundry-rjteh-ais-swce-poc.cognitiveservices.azure.com/"
-deployment_name = "ITOA-Service_Desk-Agentic_AI_POC-gpt-5-mini"  # Correct deployment
-subscription_key = "YOUR_API_KEY"  # Add your key
+deployment_name = "ITOA-Service_Desk-Agentic_AI_POC-gpt-5-mini" 
+subscription_key = "YOUR_API_KEY"
 api_version = "2024-12-01-preview"
 
 def direct_llm_call():
@@ -22,32 +18,20 @@ def direct_llm_call():
     start = time.time()
 
     response = client.chat.completions.create(
-        model=deployment_name,        # IMPORTANT: use deployment_name
+        model=deployment_name,
         messages=[
             {"role": "user", "content": "Hello! This is a direct LLM test message."}
         ],
-        max_completion_tokens=4096
+        max_completion_tokens=2048
     )
 
     end = time.time()
 
     print("\nAssistant Response:\n")
-    print(response.choices[0].message["content"])
+    print(response.choices[0].message.content)  # <-- FIXED
 
     print(f"\n⏱ Time Taken (Direct LLM): {end - start:.3f} seconds\n")
 
 
 if __name__ == "__main__":
     direct_llm_call()
-
-
-Assistant Response:
-
-Traceback (most recent call last):
-  File "F:\Kousik\helpdesk_assistant\direct_llm.py", line 42, in <module>
-    direct_llm_call()
-    ~~~~~~~~~~~~~~~^^
-  File "F:\Kousik\helpdesk_assistant\direct_llm.py", line 36, in direct_llm_call
-    print(response.choices[0].message["content"])
-          ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
-TypeError: 'ChatCompletionMessage' object is not subscriptable
