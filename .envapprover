@@ -36,166 +36,113 @@ def direct_llm_call():
 
 if __name__ == "__main__":
     direct_llm_call()
-If an issue is found:
-Start with “Issue Found”, then describe the issue briefly, and after that provide the Conclusion.
-If no issue is found:
-Start with “No Action Required”, then provide the Conclusion explaining why everything is okay.
-
-# replace values accordingly
-ORG=your-azure-devops-organization
-PROJECT=your-project-name
-REPO=your-repo-name
-PAT=your_personal_access_token_here
-SOURCE_BRANCH=main        # or 'master' — jisse se branch create karna hai
-LOCAL_PS_FILE=sample_script.ps1
 
 
+
+
+
+import time
+from azure.identity import DefaultAzureCredential
 from azure.ai.projects import AIProjectClient
-from azure.identity import AzureCliCredential
 from azure.ai.agents.models import ListSortOrder
-from azure.mgmt.automation import AutomationClient
-from datetime import datetime
 
-# -------------------------------
-# Azure Configurations
-# -------------------------------
-AZURE_SUBSCRIPTION_ID = "5e31a9fe-8582-4f44-abd5-0a925d25c818"
-AZURE_RESOURCE_GROUP = "aoairg"
-AUTOMATION_ACCOUNT = "automationagent"
-PROJECT_ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc"
-AGENT_ID = "asst_PJGp1mw7VNLpG0Uwy6ZU7mMW"   # Your agent ID from first code
+# -----------------------------------------
+# AGENT-BASED CALL
+# -----------------------------------------
 
-# -------------------------------
-# Credentials (NO tenant/client needed)
-# -------------------------------
-credential = AzureCliCredential()
+# Hardcode your values here
+ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com"
+PROJECT_NAME = "aifp-uqqnf-ais-swce-poc"
+AGENT_ID = "asst_MxWLoHuCHSwnPxyZfzUe2EOb"   # <-- your agent ID
 
-# Project Client using CLI Auth
-project = AIProjectClient(
-    credential=credential,
-    endpoint=PROJECT_ENDPOINT
-)
+def agent_call():
+    print("=== AGENT CALL ===")
 
-# Automation Client using CLI Auth
-automation_client = AutomationClient(
-    credential=credential,
-    subscription_id=AZURE_SUBSCRIPTION_ID
-)
+    project = AIProjectClient(
+        credential=DefaultAzureCredential(),
+        endpoint=f"{ENDPOINT}/api/projects/{PROJECT_NAME}"
+    )
 
-# -------------------------------
-# Load the Agent
-# -------------------------------
-agent = project.agents.get_agent(AGENT_ID)
+    # Track total timer
+    total_start = time.time()
 
-# -------------------------------
-# Create a thread
-# -------------------------------
-thread = project.agents.threads.create()
-print(f"Created thread, ID: {thread.id}")
+    # ---------------------------
+    # 1. GET AGENT
+    # ---------------------------
+    t0 = time.time()
+    agent = project.agents.get_agent(AGENT_ID)
+    t1 = time.time()
+    print(f"Time to get agent: {t1-t0:.3f} sec")
 
-# -------------------------------
-# Function: Execute Runbook
-# -------------------------------
-def execute_runbook(runbook_name):
-    try:
-        runbooks = automation_client.runbook.list_by_automation_account(
-            AZURE_RESOURCE_GROUP, AUTOMATION_ACCOUNT
-        )
-        available = [rb.name for rb in runbooks]
+    # ---------------------------
+    # 2. CREATE THREAD
+    # ---------------------------
+    t0 = time.time()
+    thread = project.agents.threads.create()
+    t1 = time.time()
+    print(f"Time to create thread: {t1-t0:.3f} sec")
 
-        if runbook_name not in available:
-            return f"Runbook '{runbook_name}' not found."
-
-        job_name = f"job_{runbook_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        job_params = {
-            "runbook": {"name": runbook_name},
-            "parameters": {}
-        }
-
-        job = automation_client.job.create(
-            AZURE_RESOURCE_GROUP,
-            AUTOMATION_ACCOUNT,
-            job_name,
-            job_params
-        )
-        return f"✅ Runbook '{runbook_name}' started successfully. Job ID: {job.job_id}"
-    except Exception as e:
-        return f"❌ Failed to start runbook '{runbook_name}': {str(e)}"
-
-# -------------------------------
-# Function: Chat with Agent
-# -------------------------------
-def chat_with_agent(user_input):
+    # ---------------------------
+    # 3. CREATE USER MESSAGE
+    # ---------------------------
+    t0 = time.time()
     project.agents.messages.create(
         thread_id=thread.id,
         role="user",
-        content=user_input
+        content="Hi Agentic_AI_POC_Diagnostics_Agent"
     )
+    t1 = time.time()
+    print(f"Time to create user message: {t1-t0:.3f} sec")
 
+    # ---------------------------
+    # 4. RUN AGENT
+    # ---------------------------
+    t0 = time.time()
     run = project.agents.runs.create_and_process(
         thread_id=thread.id,
         agent_id=agent.id
     )
+    t1 = time.time()
+    print(f"Time to run agent: {t1-t0:.3f} sec")
 
+    # Check status
     if run.status == "failed":
-        return f"Run failed: {run.last_error}"
+        print(f"Run failed: {run.last_error}")
+        return
 
-    messages = list(project.agents.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING))
+    # ---------------------------
+    # 5. LIST RESPONSE MESSAGES
+    # ---------------------------
+    t0 = time.time()
+    messages = project.agents.messages.list(
+        thread_id=thread.id,
+        order=ListSortOrder.ASCENDING
+    )
+    t1 = time.time()
+    print(f"Time to list messages: {t1-t0:.3f} sec\n")
 
-    for message in reversed(messages):
-        if message.role == "assistant" and message.text_messages:
-            response_text = message.text_messages[-1].text.value
-            # Simple keyword-based runbook extraction
-            for keyword in response_text.split():
-                if keyword.startswith("Azure_") or keyword.startswith("Fix-"):
-                    runbook_name = keyword.strip(",.")
-                    runbook_result = execute_runbook(runbook_name)
-                    return f"{response_text}\n\n{runbook_result}"
-            return response_text
+    print("Agent Output:\n")
+    for m in messages:
+        if m.text_messages:
+            print(f"{m.role}: {m.text_messages[-1].text.value}")
 
-# -------------------------------
-# Chat Loop
-# -------------------------------
-print("Chat with your agent. Type 'exit' to quit.")
-while True:
-    user_input = input("You: ").strip()
-    if user_input.lower() == "exit":
-        break
-    response = chat_with_agent(user_input)
-    print(f"Agent: {response}")
+    total_end = time.time()
+    print(f"\n⏱ Total Time Taken (Agent Call): {total_end - total_start:.3f} seconds\n")
 
+if __name__ == "__main__":
+    agent_call()
 
 
 
 
-from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential
-from azure.ai.agents.models import ListSortOrder
 
-project = AIProjectClient(
-    credential=DefaultAzureCredential(),
-    endpoint="https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc")
 
-agent = project.agents.get_agent("asst_MxWLoHuCHSwnPxyZfzUe2EOb")
 
-thread = project.agents.threads.create()
-print(f"Created thread, ID: {thread.id}")
 
-message = project.agents.messages.create(
-    thread_id=thread.id,
-    role="user",
-    content="Hi Agentic_AI_POC_Diagnostics_Agent"
-)
 
-run = project.agents.runs.create_and_process(
-    thread_id=thread.id,
-    agent_id=agent.id)
 
-if run.status == "failed":
-    print(f"Run failed: {run.last_error}")
-else:
-    messages = project.agents.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
 
-    for message in messages:
-        if message.text_messages:
-            print(f"{message.role}: {message.text_messages[-1].text.value}")
+
+
+
+
