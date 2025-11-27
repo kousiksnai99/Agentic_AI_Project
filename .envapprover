@@ -1,31 +1,32 @@
 import time
 from openai import AzureOpenAI
 
-# ---------------------------------------------------------
-# Direct LLM Call (Correct SDK)
-# ---------------------------------------------------------
+# ------------------------------
+# Direct LLM Call
+# ------------------------------
 
-# Hardcode credentials here
-AZURE_OPENAI_ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com"
-AZURE_OPENAI_KEY = "G3T2HOKaVUTwDmDkV0OaEOrlsjO90eJPfaWZErYpODlIvzuOhEMoJQQJ99BJACfhMk5XJ3w3AAAAACOG8gdK"              # <-- Add your key
-DEPLOYMENT_NAME = "gpt-5-mini"                 # <-- Your model deployment name
+endpoint = "https://aifoundry-rjteh-ais-swce-poc.cognitiveservices.azure.com/"
+deployment_name = "ITOA-Service_Desk-Agentic_AI_POC-gpt-5-mini"  # Correct deployment
+subscription_key = "YOUR_API_KEY"  # Add your key
+api_version = "2024-12-01-preview"
 
 def direct_llm_call():
     print("=== DIRECT LLM CALL ===")
 
     client = AzureOpenAI(
-        api_key=AZURE_OPENAI_KEY,
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        api_version="2024-05-01-preview"
+        api_version=api_version,
+        azure_endpoint=endpoint,
+        api_key=subscription_key,
     )
 
     start = time.time()
 
     response = client.chat.completions.create(
-        model=DEPLOYMENT_NAME,
+        model=deployment_name,        # IMPORTANT: use deployment_name
         messages=[
             {"role": "user", "content": "Hello! This is a direct LLM test message."}
-        ]
+        ],
+        max_completion_tokens=4096
     )
 
     end = time.time()
@@ -38,81 +39,3 @@ def direct_llm_call():
 
 if __name__ == "__main__":
     direct_llm_call()
-
-
-python direct_llm.py
-=== DIRECT LLM CALL ===
-Traceback (most recent call last):
-  File "F:\Kousik\helpdesk_assistant\direct_llm.py", line 40, in <module>
-    direct_llm_call()
-    ~~~~~~~~~~~~~~~^^
-  File "F:\Kousik\helpdesk_assistant\direct_llm.py", line 24, in direct_llm_call
-    response = client.chat.completions.create(
-        model=DEPLOYMENT_NAME,
-    ...<2 lines>...
-        ]
-    )
-  File "C:\Users\KSNAI\AppData\Local\Programs\Python\Python313\Lib\site-packages\openai\_utils\_utils.py", line 287, in wrapper      
-    return func(*args, **kwargs)
-  File "C:\Users\KSNAI\AppData\Local\Programs\Python\Python313\Lib\site-packages\openai\resources\chat\completions\completions.py", line 1147, in create
-    return self._post(
-           ~~~~~~~~~~^
-        "/chat/completions",
-        ^^^^^^^^^^^^^^^^^^^^
-    ...<46 lines>...
-        stream_cls=Stream[ChatCompletionChunk],
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\KSNAI\AppData\Local\Programs\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1259, in post
-    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
-                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\KSNAI\AppData\Local\Programs\Python\Python313\Lib\site-packages\openai\_base_client.py", line 1047, in request      
-    raise self._make_status_error_from_response(err.response) from None
-openai.NotFoundError: Error code: 404 - {'error': {'code': 'DeploymentNotFound', 'message': 'The API deployment for this resource does not exist. If you created the deployment within the last 5 minutes, please wait a moment and try again.'}}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import os
-from openai import AzureOpenAI
-
-endpoint = "https://aifoundry-rjteh-ais-swce-poc.cognitiveservices.azure.com/"
-model_name = "gpt-5-mini"
-deployment = "ITOA-Service_Desk-Agentic_AI_POC-gpt-5-mini"
-
-subscription_key = "<your-api-key>"
-api_version = "2024-12-01-preview"
-
-client = AzureOpenAI(
-    api_version=api_version,
-    azure_endpoint=endpoint,
-    api_key=subscription_key,
-)
-
-response = client.chat.completions.create(
-    messages=[
-        {
-            "role": "system",
-            "content": "You are a helpful assistant.",
-        },
-        {
-            "role": "user",
-            "content": "I am going to Paris, what should I see?",
-        }
-    ],
-    max_completion_tokens=16384,
-    model=deployment
-)
-
-print(response.choices[0].message.content)
