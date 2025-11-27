@@ -125,3 +125,39 @@ while True:
         break
     response = chat_with_agent(user_input)
     print(f"Agent: {response}")
+
+
+
+
+
+from azure.ai.projects import AIProjectClient
+from azure.identity import DefaultAzureCredential
+from azure.ai.agents.models import ListSortOrder
+
+project = AIProjectClient(
+    credential=DefaultAzureCredential(),
+    endpoint="https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc")
+
+agent = project.agents.get_agent("asst_MxWLoHuCHSwnPxyZfzUe2EOb")
+
+thread = project.agents.threads.create()
+print(f"Created thread, ID: {thread.id}")
+
+message = project.agents.messages.create(
+    thread_id=thread.id,
+    role="user",
+    content="Hi Agentic_AI_POC_Diagnostics_Agent"
+)
+
+run = project.agents.runs.create_and_process(
+    thread_id=thread.id,
+    agent_id=agent.id)
+
+if run.status == "failed":
+    print(f"Run failed: {run.last_error}")
+else:
+    messages = project.agents.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
+
+    for message in messages:
+        if message.text_messages:
+            print(f"{message.role}: {message.text_messages[-1].text.value}")
