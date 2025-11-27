@@ -37,7 +37,16 @@ def direct_llm_call():
 if __name__ == "__main__":
     direct_llm_call()
 
-
+python agent.py
+=== DIRECT LLM CALL ===
+Traceback (most recent call last):
+  File "F:\Kousik\helpdesk_assistant\agent.py", line 38, in <module>
+    direct_llm_call()
+    ~~~~~~~~~~~~~~~^^
+  File "F:\Kousik\helpdesk_assistant\agent.py", line 24, in direct_llm_call
+    response = project.chat.completions.create(
+               ^^^^^^^^^^^^
+AttributeError: 'AIProjectClient' object has no attribute 'chat'
 
 
 
