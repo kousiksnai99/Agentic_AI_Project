@@ -1,3 +1,41 @@
+import time
+from azure.identity import DefaultAzureCredential
+from azure.ai.projects import AIProjectClient
+
+# -----------------------------------------
+# DIRECT LLM CALL (NO AGENT)
+# -----------------------------------------
+
+# Hardcode your values here
+ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com"
+PROJECT_NAME = "aifp-uqqnf-ais-swce-poc"
+DEPLOYMENT_NAME = "gpt-4o-mini"     # <-- Your Azure OpenAI model name
+
+def direct_llm_call():
+    print("=== DIRECT LLM CALL ===")
+
+    project = AIProjectClient(
+        endpoint=f"{ENDPOINT}/api/projects/{PROJECT_NAME}",
+        credential=DefaultAzureCredential()
+    )
+
+    start = time.time()
+
+    response = project.chat.completions.create(
+        model=DEPLOYMENT_NAME,
+        messages=[
+            {"role": "user", "content": "Hello, this is direct LLM call. How are you?"}
+        ]
+    )
+
+    end = time.time()
+
+    assistant_response = response.choices[0].message["content"]
+    print(f"\nAssistant Response:\n{assistant_response}")
+    print(f"\n⏱ Time Taken (Direct LLM): {end - start:.3f} seconds\n")
+
+if __name__ == "__main__":
+    direct_llm_call()
 If an issue is found:
 Start with “Issue Found”, then describe the issue briefly, and after that provide the Conclusion.
 If no issue is found:
