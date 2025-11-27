@@ -39,3 +39,15 @@ def direct_llm_call():
 
 if __name__ == "__main__":
     direct_llm_call()
+
+
+Assistant Response:
+
+Traceback (most recent call last):
+  File "F:\Kousik\helpdesk_assistant\direct_llm.py", line 42, in <module>
+    direct_llm_call()
+    ~~~~~~~~~~~~~~~^^
+  File "F:\Kousik\helpdesk_assistant\direct_llm.py", line 36, in direct_llm_call
+    print(response.choices[0].message["content"])
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+TypeError: 'ChatCompletionMessage' object is not subscriptable
