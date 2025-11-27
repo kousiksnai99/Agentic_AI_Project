@@ -1,157 +1,40 @@
 import time
-from azure.identity import DefaultAzureCredential
-from azure.ai.projects import AIProjectClient
+from openai import AzureOpenAI
 
-# -----------------------------------------
-# DIRECT LLM CALL (NO AGENT)
-# -----------------------------------------
+# ---------------------------------------------------------
+# Direct LLM Call (Correct SDK)
+# ---------------------------------------------------------
 
-# Hardcode your values here
-ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com"
-PROJECT_NAME = "aifp-uqqnf-ais-swce-poc"
-DEPLOYMENT_NAME = "gpt-4o-mini"     # <-- Your Azure OpenAI model name
+# Hardcode credentials here
+AZURE_OPENAI_ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com"
+AZURE_OPENAI_KEY = "YOUR_KEY_HERE"              # <-- Add your key
+DEPLOYMENT_NAME = "gpt-4o-mini"                 # <-- Your model deployment name
 
 def direct_llm_call():
     print("=== DIRECT LLM CALL ===")
 
-    project = AIProjectClient(
-        endpoint=f"{ENDPOINT}/api/projects/{PROJECT_NAME}",
-        credential=DefaultAzureCredential()
+    client = AzureOpenAI(
+        api_key=AZURE_OPENAI_KEY,
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        api_version="2024-05-01-preview"
     )
 
     start = time.time()
 
-    response = project.chat.completions.create(
+    response = client.chat.completions.create(
         model=DEPLOYMENT_NAME,
         messages=[
-            {"role": "user", "content": "Hello, this is direct LLM call. How are you?"}
+            {"role": "user", "content": "Hello! This is a direct LLM test message."}
         ]
     )
 
     end = time.time()
 
-    assistant_response = response.choices[0].message["content"]
-    print(f"\nAssistant Response:\n{assistant_response}")
+    print("\nAssistant Response:\n")
+    print(response.choices[0].message["content"])
+
     print(f"\n⏱ Time Taken (Direct LLM): {end - start:.3f} seconds\n")
 
-if __name__ == "__main__":
-    direct_llm_call()
-
-python agent.py
-=== DIRECT LLM CALL ===
-Traceback (most recent call last):
-  File "F:\Kousik\helpdesk_assistant\agent.py", line 38, in <module>
-    direct_llm_call()
-    ~~~~~~~~~~~~~~~^^
-  File "F:\Kousik\helpdesk_assistant\agent.py", line 24, in direct_llm_call
-    response = project.chat.completions.create(
-               ^^^^^^^^^^^^
-AttributeError: 'AIProjectClient' object has no attribute 'chat'
-
-
-
-import time
-from azure.identity import DefaultAzureCredential
-from azure.ai.projects import AIProjectClient
-from azure.ai.agents.models import ListSortOrder
-
-# -----------------------------------------
-# AGENT-BASED CALL
-# -----------------------------------------
-
-# Hardcode your values here
-ENDPOINT = "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com"
-PROJECT_NAME = "aifp-uqqnf-ais-swce-poc"
-AGENT_ID = "asst_MxWLoHuCHSwnPxyZfzUe2EOb"   # <-- your agent ID
-
-def agent_call():
-    print("=== AGENT CALL ===")
-
-    project = AIProjectClient(
-        credential=DefaultAzureCredential(),
-        endpoint=f"{ENDPOINT}/api/projects/{PROJECT_NAME}"
-    )
-
-    # Track total timer
-    total_start = time.time()
-
-    # ---------------------------
-    # 1. GET AGENT
-    # ---------------------------
-    t0 = time.time()
-    agent = project.agents.get_agent(AGENT_ID)
-    t1 = time.time()
-    print(f"Time to get agent: {t1-t0:.3f} sec")
-
-    # ---------------------------
-    # 2. CREATE THREAD
-    # ---------------------------
-    t0 = time.time()
-    thread = project.agents.threads.create()
-    t1 = time.time()
-    print(f"Time to create thread: {t1-t0:.3f} sec")
-
-    # ---------------------------
-    # 3. CREATE USER MESSAGE
-    # ---------------------------
-    t0 = time.time()
-    project.agents.messages.create(
-        thread_id=thread.id,
-        role="user",
-        content="Hi Agentic_AI_POC_Diagnostics_Agent"
-    )
-    t1 = time.time()
-    print(f"Time to create user message: {t1-t0:.3f} sec")
-
-    # ---------------------------
-    # 4. RUN AGENT
-    # ---------------------------
-    t0 = time.time()
-    run = project.agents.runs.create_and_process(
-        thread_id=thread.id,
-        agent_id=agent.id
-    )
-    t1 = time.time()
-    print(f"Time to run agent: {t1-t0:.3f} sec")
-
-    # Check status
-    if run.status == "failed":
-        print(f"Run failed: {run.last_error}")
-        return
-
-    # ---------------------------
-    # 5. LIST RESPONSE MESSAGES
-    # ---------------------------
-    t0 = time.time()
-    messages = project.agents.messages.list(
-        thread_id=thread.id,
-        order=ListSortOrder.ASCENDING
-    )
-    t1 = time.time()
-    print(f"Time to list messages: {t1-t0:.3f} sec\n")
-
-    print("Agent Output:\n")
-    for m in messages:
-        if m.text_messages:
-            print(f"{m.role}: {m.text_messages[-1].text.value}")
-
-    total_end = time.time()
-    print(f"\n⏱ Total Time Taken (Agent Call): {total_end - total_start:.3f} seconds\n")
 
 if __name__ == "__main__":
-    agent_call()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    direct_llm_call()
