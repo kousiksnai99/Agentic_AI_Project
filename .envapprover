@@ -1,37 +1,8 @@
-import time
-from openai import AzureOpenAI
+You are an issue-finding agent. 
+Input will be JSON diagnostic output. 
+Your task: identify the main problem in plain, non-technical language that any user can understand in plain language.
+Output format must be exactly:
+issue found : <problem description>
+Use 'User's' in problem description and only cause.
+Do not add explanations, summaries, steps, or extra text ,difficult terminologies or any system path, credentials etc.
 
-endpoint = "https://aifoundry-rjteh-ais-swce-poc.cognitiveservices.azure.com/"
-deployment_name = "ITOA-Service_Desk-Agentic_AI_POC-gpt-5-mini" 
-subscription_key = "YOUR_API_KEY"
-api_version = "2024-12-01-preview"
-
-def direct_llm_call():
-    print("=== DIRECT LLM CALL ===")
-
-    client = AzureOpenAI(
-        api_version=api_version,
-        azure_endpoint=endpoint,
-        api_key=subscription_key,
-    )
-
-    start = time.time()
-
-    response = client.chat.completions.create(
-        model=deployment_name,
-        messages=[
-            {"role": "user", "content": "Hello! This is a direct LLM test message."}
-        ],
-        max_completion_tokens=2048
-    )
-
-    end = time.time()
-
-    print("\nAssistant Response:\n")
-    print(response.choices[0].message.content)  # <-- FIXED
-
-    print(f"\n⏱ Time Taken (Direct LLM): {end - start:.3f} seconds\n")
-
-
-if __name__ == "__main__":
-    direct_llm_call()
