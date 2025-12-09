@@ -1,129 +1,172 @@
-Agentic AI POC – Complete Scope Document 
+Agentic AI POC – Complete Scope Document
+1. Purpose & Core Objective of the POC
 
-1. Core Objective of the POC 
+The Agentic AI Proof of Concept (POC) is designed to demonstrate end-to-end AI-driven IT automation using Azure AI Foundry, Azure Automation, Hybrid Runbook Worker, SCCM, and supporting enterprise systems.
+The POC validates:
 
-Demonstrate end-to-end AI-driven IT automation using Azure AI Foundry, Azure Automation, Hybrid Runbook Worker, and SCCM. Automate diagnosing, selecting, cloning, publishing, and executing a runbook based on a user-reported issue. 
+Automation feasibility
 
-2. Functional Scope (IN SCOPE) 
+AI-based runbook selection
 
-2.1 Azure Function 
+Architectural design
 
-• Receives issue descriptions from callers. 
-• Validates payload fields. 
-• Loads configuration using Akeyless. 
-• Uses Managed Identity for Azure resources. 
+Integration touchpoints
 
-2.2 Azure AI Foundry Diagnostic Pipeline 
+Reliability of cloning, publishing, and executing runbooks
 
-• Integration with Azure AI Foundry diagnostic agent. 
-• AI-based issue classification and runbook selection. 
-• Logging of all AI reasoning steps. 
+Telemetry and diagnostics pipeline
 
-2.3 Runbook Cloning & Metadata Injection 
+The goal is to automate diagnosing an issue, selecting a corresponding runbook, cloning and publishing it, and executing it on a Hybrid Worker—fully orchestrated by Agentic AI reasoning.
 
-• Fetching source runbook. 
-• Creating cloned runbook with metadata. 
-• Uploading and publishing runbook. 
+2. High-Level Workflow
 
-2.4 Runbook Execution 
+A caller (Service Desk, application, or virtual agent) submits an IT issue to an HTTP-triggered Azure Function.
 
-• Execution via Hybrid Runbook Worker Group. 
-• Job creation and tracking. 
-• Logging job metadata. 
+The Azure Function validates incoming payloads, loads configuration from Akeyless, and sends the issue description to an Azure AI Foundry diagnostic agent.
 
-2.5 Logging & Event Telemetry 
+The agent classifies the issue and determines the correct Azure Automation Runbook.
 
-• Telemetry to Event Hub for each pipeline step. 
-• Execution timing and diagnostics. 
+The system fetches the source runbook, clones it, embeds metadata (e.g., machine name, session ID, username), publishes it, and prepares the job for execution.
 
-2.6 Akeyless Secret Management 
+The cloned runbook is executed on a Hybrid Runbook Worker Group (SCCM-based execution path).
 
-• Secure retrieval of configuration values. 
-• Supports Automation and AI Foundry integration. 
+All reasoning steps, decisions, timings, and job metadata are logged to Event Hub.
 
-2.7 Integration Layer Validation 
+Integration with systems such as SCCM, ServiceNow, WebMethods APIM, DataPower, and Azure Arc is validated at a connectivity level but not automated in this POC.
 
-• Validates touchpoints with WebMethods, DataPower, ServiceNow, SCCM, Azure Arc, Event Hub. 
-• No automated flows included. 
+3. Functional Scope (In Scope)
+3.1 Azure Function
 
-3. Technical Scope 
+Receives issue descriptions from callers.
 
-Includes Azure Automation, Hybrid Worker, Event Hub, AI Foundry Agents, Managed Identities, Python Function code, Pydantic validation, PowerShell script manipulation. 
+Validates payload fields using Pydantic models.
 
-4. Out-of-Scope Items 
+Loads configuration using Akeyless secure vault.
 
-• ServiceNow workflows. 
-• Production security. 
-• Splunk dashboards. 
-• Conversational multi-step agents. 
-• Full Teams chatbot UI. 
-• SCCM remediation beyond runbook execution. 
-• Governance & SDLC. 
-• Production releases. 
+Uses Managed Identity for interacting with Azure services.
 
-5. POC Deliverables 
+Sends validated issue descriptions to Azure AI Foundry diagnostic agents.
 
-• Fully functional agentic automation pipeline. 
-• AI-based runbook resolver. 
-• Automated cloning/publishing/execution workflow. 
-• Event Hub logging. 
-• Architecture diagram. 
-• Full Azure Function code. 
-• Complete POC scope document. 
+3.2 Azure AI Foundry Diagnostic Pipeline
 
- 
+Integration with Azure AI Foundry troubleshooting and diagnostic agents.
 
- 
+AI-based issue classification and runbook mapping.
 
- 
+Logging of all AI reasoning steps and decisions.
 
-Agentic AI POC – Scope Document 
+3.3 Runbook Cloning & Metadata Injection
 
-1. Purpose of the POC 
+Fetching an existing source runbook from Azure Automation.
 
-The Agentic AI Proof of Concept (POC) aims to demonstrate how an AI-driven automation pipeline can resolve IT issues by mapping user‑submitted problem descriptions to Azure Automation Runbooks using Azure AI Foundry. The POC validates feasibility, architectural design, automation reliability, and integration across enterprise systems. 
+Cloning the runbook and injecting metadata (machine name, session ID, username, context).
 
-2. High‑Level Workflow 
+Uploading the cloned runbook.
 
-1. A caller (Service Desk, App, or Virtual Agent) submits an IT issue to an HTTP‑triggered Azure Function. 
-2. The Azure Function validates input and sends the issue description to an Azure AI Foundry diagnostic agent. 
-3. The agent determines the correct Azure Automation Runbook for that specific issue. 
-4. The Azure Function clones the runbook, embeds contextual metadata (target machine, user session, etc.), publishes the runbook, and triggers execution via Hybrid Runbook Worker. 
-5. Logs, decisions, and events are pushed to Event Hub for tracking and analytics. 
-6. Integration with systems such as SCCM, Azure Arc, ServiceNow, WebMethods APIM, and DataPower is reflected in the supporting architecture but not directly automated in this POC. 
+Publishing the runbook in Azure Automation.
 
-3. Scope of the POC 
+3.4 Runbook Execution
 
-The following items are IN SCOPE for the POC: 
+Executing the published runbook via Hybrid Runbook Worker Group (leveraging SCCM path).
 
-• Development of an HTTP‑triggered Azure Function capable of receiving and validating issue requests. 
-• Integration with Azure AI Foundry diagnostic and troubleshooting agents. 
-• Mapping issue descriptions to predefined Azure Automation Runbooks using AI. 
-• Cloning existing Runbooks and injecting metadata (machine name, session ID, username). 
-• Publishing the cloned Runbook into Azure Automation. 
-• Executing the Runbook on a defined Hybrid Worker Group (SCCM‑based execution path). 
-• Logging events and performance metrics to Azure Event Hub. 
-• Using managed identity authentication across Azure components. 
-• Use of Akeyless for secret management (IDs, keys, variables). 
-• Timeline and performance logging for diagnostic purposes. 
+Creating and monitoring runbook jobs.
 
-4. Out‑of‑Scope Items 
+Logging job details, status, and timing.
 
-The following items are OUT OF SCOPE for this POC (may be covered in future phases): 
+3.5 Logging & Event Telemetry
 
-• Production‑grade security hardening and enterprise compliance. 
-• Full integration with ServiceNow workflows. 
-• End‑to‑end SCCM device remediation workflows beyond runbook trigger. 
-• Complex troubleshooting requiring multi‑step agent reasoning. 
-• Automated guardrail enforcement or governance checks. 
-• Finalization of event analytics dashboards (Splunk / Event Hub consumers). 
-• User experience design (Teams chatbot or portal integration). 
+Emitting telemetry to Event Hub for each step of the automation pipeline.
 
-5. Deliverables 
+Capturing execution timing, diagnostic data, and agentic reasoning context.
 
-• Fully functional Azure Function implementation. 
-• Connectivity to Azure AI Foundry agents. 
-• Automated Runbook cloning + publishing + execution workflow. 
-• Event Hub‑based logging framework. 
-• POC architecture diagram and technical documentation. 
-• This POC Scope docume 
+3.6 Akeyless Secret Management
+
+Secure retrieval of sensitive configuration values.
+
+Supports both Azure Automation and AI Foundry integration scenarios.
+
+3.7 Integration Layer Validation
+
+Connectivity validation of touchpoints with:
+
+WebMethods
+
+DataPower
+
+ServiceNow
+
+SCCM
+
+Azure Arc
+
+Event Hub
+
+No automated workflows executed against these systems during the POC.
+
+4. Technical Scope
+
+The POC includes the following technologies and components:
+
+Azure Automation Accounts
+
+Hybrid Runbook Worker (HRW) architecture
+
+Azure Event Hub
+
+Azure AI Foundry (diagnostic and decision-making agents)
+
+Managed Identities
+
+Akeyless Secret Manager
+
+Python Azure Function
+
+Pydantic validation models
+
+PowerShell manipulation within cloned runbooks
+
+SCCM-based execution path (trigger only)
+
+Telemetry and instrumentation pipeline
+
+5. Out-of-Scope Items
+
+The following are intentionally excluded from the POC but may be included in future phases:
+
+Production-grade security hardening and compliance controls
+
+Full ServiceNow workflow integration
+
+SCCM remediation workflows beyond runbook execution
+
+Complex conversational multi-step AI agents
+
+Governance, guardrails, SDLC, and enterprise deployment processes
+
+Production release pipelines
+
+Splunk dashboards or Event Hub consumer analytics
+
+Chatbot UI experiences (Teams/Portal)
+
+End-to-end remediation lifecycle beyond runbook invocation
+
+6. POC Deliverables
+
+The POC will produce the following:
+
+Fully functional Azure Function with validation, telemetry, and AI integration
+
+Operational Agentic AI Runbook Resolver
+
+Automated runbook cloning, metadata injection, publishing, and execution workflow
+
+Event Hub logging architecture & implementation
+
+AI diagnostic pipeline with recorded reasoning steps
+
+Architecture diagram (logical and detailed)
+
+Full Python Function codebase
+
+Complete POC scope and technical documentation
