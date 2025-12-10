@@ -1,172 +1,153 @@
-Agentic AI POC – Complete Scope Document
-1. Purpose & Core Objective of the POC
+1. Full Automated Issue → Diagnosis → Fix Workflow
 
-The Agentic AI Proof of Concept (POC) is designed to demonstrate end-to-end AI-driven IT automation using Azure AI Foundry, Azure Automation, Hybrid Runbook Worker, SCCM, and supporting enterprise systems.
-The POC validates:
+After the POC, the system can be expanded to perform:
 
-Automation feasibility
+Multi-step troubleshooting flows
 
-AI-based runbook selection
+Automated diagnosis using historical patterns
 
-Architectural design
+Automatic selection of the best remediation workflow
 
-Integration touchpoints
+End-to-end execution with zero human intervention
 
-Reliability of cloning, publishing, and executing runbooks
+This will enable Level–1 and Level–2 issue resolution to be fully automated.
 
-Telemetry and diagnostics pipeline
+2. Dynamic Runbook Generation
 
-The goal is to automate diagnosing an issue, selecting a corresponding runbook, cloning and publishing it, and executing it on a Hybrid Worker—fully orchestrated by Agentic AI reasoning.
+Instead of cloning existing runbooks only, the system can:
 
-2. High-Level Workflow
+Generate new runbooks dynamically using AI
 
-A caller (Service Desk, application, or virtual agent) submits an IT issue to an HTTP-triggered Azure Function.
+Modify logic based on system context
 
-The Azure Function validates incoming payloads, loads configuration from Akeyless, and sends the issue description to an Azure AI Foundry diagnostic agent.
+Create tailored automation steps per server/application
 
-The agent classifies the issue and determines the correct Azure Automation Runbook.
+This moves the platform toward auto-generated remediation playbooks.
 
-The system fetches the source runbook, clones it, embeds metadata (e.g., machine name, session ID, username), publishes it, and prepares the job for execution.
+3. Full ServiceNow Integration
 
-The cloned runbook is executed on a Hybrid Runbook Worker Group (SCCM-based execution path).
+After the POC, these can be added:
 
-All reasoning steps, decisions, timings, and job metadata are logged to Event Hub.
+Auto-create incidents
 
-Integration with systems such as SCCM, ServiceNow, WebMethods APIM, DataPower, and Azure Arc is validated at a connectivity level but not automated in this POC.
+Auto-update ticket status
 
-3. Functional Scope (In Scope)
-3.1 Azure Function
+Auto-close tickets after runbook success
 
-Receives issue descriptions from callers.
+Two-way syncing with assignment groups, CMDB, CI mappings
 
-Validates payload fields using Pydantic models.
+This creates a closed-loop ITSM automation pipeline.
 
-Loads configuration using Akeyless secure vault.
+4. SCCM / Intune Remediation Workflows
 
-Uses Managed Identity for interacting with Azure services.
+Once basic SCCM connectivity is validated in the POC:
 
-Sends validated issue descriptions to Azure AI Foundry diagnostic agents.
+Patch installation workflows
 
-3.2 Azure AI Foundry Diagnostic Pipeline
+Software deployment automation
 
-Integration with Azure AI Foundry troubleshooting and diagnostic agents.
+Compliance remediation
 
-AI-based issue classification and runbook mapping.
+System restart/health checks
 
-Logging of all AI reasoning steps and decisions.
+Application-specific fixes
 
-3.3 Runbook Cloning & Metadata Injection
+This brings real operational automation to desktop/server environments.
 
-Fetching an existing source runbook from Azure Automation.
+5. AI-powered Root Cause Analysis
 
-Cloning the runbook and injecting metadata (machine name, session ID, username, context).
+After POC, the system can:
 
-Uploading the cloned runbook.
+Analyze logs, events, metrics
 
-Publishing the runbook in Azure Automation.
+Detect anomalies across systems
 
-3.4 Runbook Execution
+Correlate issues (SCCM, SNOW, DataPower, etc.)
 
-Executing the published runbook via Hybrid Runbook Worker Group (leveraging SCCM path).
+Recommend preventive actions
 
-Creating and monitoring runbook jobs.
+This establishes Predictive Operations (AIOps).
 
-Logging job details, status, and timing.
+6. Multi-Agent Conversational Troubleshooting
 
-3.5 Logging & Event Telemetry
+Future work can include:
 
-Emitting telemetry to Event Hub for each step of the automation pipeline.
+Tier-1 virtual agent for basic diagnosis
 
-Capturing execution timing, diagnostic data, and agentic reasoning context.
+Tier-2 reasoning agent for deep troubleshooting
 
-3.6 Akeyless Secret Management
+Runbook agent for execution
 
-Secure retrieval of sensitive configuration values.
+Knowledge agent for documentation search
 
-Supports both Azure Automation and AI Foundry integration scenarios.
+This will build a full agentic ecosystem for IT support.
 
-3.7 Integration Layer Validation
+7. Cross-Platform Automation
 
-Connectivity validation of touchpoints with:
+With the foundation built in the POC, you can automate flows across:
 
-WebMethods
+Azure
 
-DataPower
-
-ServiceNow
+On-prem servers via Hybrid Runbook Worker
 
 SCCM
 
-Azure Arc
+DataPower
 
-Event Hub
+WebMethods
 
-No automated workflows executed against these systems during the POC.
+ServiceNow
 
-4. Technical Scope
+Azure Arc managed servers
 
-The POC includes the following technologies and components:
+This becomes a single unified automation platform.
 
-Azure Automation Accounts
+8. Real-Time Telemetry & Dashboarding
 
-Hybrid Runbook Worker (HRW) architecture
+You can add:
 
-Azure Event Hub
+Automated dashboards from Event Hub
 
-Azure AI Foundry (diagnostic and decision-making agents)
+Runbook success/failure metrics
 
-Managed Identities
+MTTR reduction analysis
 
-Akeyless Secret Manager
+AI reasoning traceability
 
-Python Azure Function
+This delivers strong observability & governance.
 
-Pydantic validation models
+9. Enterprise Governance (Phase-2)
 
-PowerShell manipulation within cloned runbooks
+Future enhancements include:
 
-SCCM-based execution path (trigger only)
+Role-based execution approvals
 
-Telemetry and instrumentation pipeline
+Change management integration
 
-5. Out-of-Scope Items
+Production-ready security
 
-The following are intentionally excluded from the POC but may be included in future phases:
+Runbook version governance
 
-Production-grade security hardening and compliance controls
+Automated rollback tasks
 
-Full ServiceNow workflow integration
+This makes the solution enterprise compliant.
 
-SCCM remediation workflows beyond runbook execution
+10. Large-Scale Rollout Across Use Cases
 
-Complex conversational multi-step AI agents
+This POC can be extended to cover:
 
-Governance, guardrails, SDLC, and enterprise deployment processes
+Windows/Linux troubleshooting
 
-Production release pipelines
+Patching
 
-Splunk dashboards or Event Hub consumer analytics
+Database checks
 
-Chatbot UI experiences (Teams/Portal)
+Network validation
 
-End-to-end remediation lifecycle beyond runbook invocation
+App-server restart workflows
 
-6. POC Deliverables
+Health checks
 
-The POC will produce the following:
+Compliance management
 
-Fully functional Azure Function with validation, telemetry, and AI integration
-
-Operational Agentic AI Runbook Resolver
-
-Automated runbook cloning, metadata injection, publishing, and execution workflow
-
-Event Hub logging architecture & implementation
-
-AI diagnostic pipeline with recorded reasoning steps
-
-Architecture diagram (logical and detailed)
-
-Full Python Function codebase
-
-Complete POC scope and technical documentation
+This evolves into a smart automation command center.
