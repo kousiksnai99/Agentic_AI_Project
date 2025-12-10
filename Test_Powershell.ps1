@@ -1,3 +1,4 @@
+__init__.py
 ##################################################################################### 
 ## Project name : Agentic AI POC                                                    #
 ## Business owner , Team : Data and AIA                                             #
@@ -676,7 +677,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
 
 
-
+function.json
 {
     "scriptFile": "__init__.py",
     "bindings": [
@@ -694,3 +695,4 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         }
     ]
 }
+
