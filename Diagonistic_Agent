@@ -1,517 +1,730 @@
-@app.post("/diagnostic/chat")
-def chat_with_diagnostic_agent(req: IssueRequest):
-    try:
-        logger.info(
-            "Diagnostic request received | machine=%s execute=%s",
-            req.target_machine, req.execute
-        )
+"""
+Agentic Diagnostic Azure Function
+Combines:
+ - HTTP-triggered function exposing:
+    POST /diagnostic/chat
+    POST /troubleshooting/analyze
+ - Azure Automation helpers (create/clone/publish/run)
+ - Azure AI Foundry agent interactions (diagnostic & troubleshooting)
+ - Event Hub structured logging
+ - Akeyless dict loader (placeholder: returns your dicts)
+"""
 
-        runbook_name: Optional[str] = diagnostic_process_issue(req.issue)
-
-        if not runbook_name:
-            raise HTTPException(status_code=404, detail="Diagnostic agent returned no runbook.")
-
-        if req.execute:
-            create_new_runbook(runbook_name, req.target_machine)
-            return {
-                "runbook_name": runbook_name,
-                "message": f"Runbook '{runbook_name}' executed on {req.target_machine}"
-            }
-
-        return {
-            "runbook_name": runbook_name,
-            "message": "Runbook ready but not executed."
-        }
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Unhandled exception in /diagnostic/chat: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-# -----------------------------------------------------------------------------------------------
-# TROUBLESHOOTING STEP-1
-# -----------------------------------------------------------------------------------------------
-@app.post("/troubleshooting/analyze")
-def troubleshooting_analyze(req: IssueRequest):
-    try:
-        logger.info(
-            "Troubleshooting Step-1 | machine=%s execute=%s issue=%s",
-            req.target_machine, req.execute, req.issue
-        )
-
-        cleanup_expired_pending()
-
-        runbook_name, full_description = troubleshooting_process_issue(req.issue)
-
-        if not runbook_name:
-            raise HTTPException(status_code=404, detail="Troubleshooting agent returned no runbook.")
-
-        if req.execute:
-            with PENDING_LOCK:
-                PENDING_CONFIRMATIONS[req.target_machine] = {
-                    "runbook_name": runbook_name,
-                    "full_text": full_description,
-                    "expires_at": datetime.utcnow() + timedelta(seconds=PENDING_TTL_SECONDS)
-                }
-
-        return {
-            "runbook_name": runbook_name,
-            "full_description": full_description,
-            "execute_pending": req.execute
-        }
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Unhandled exception in /troubleshooting/analyze: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-
-
-
-#################################################################################################
-## Project Name   : Agentic AI POC
-## Business Owner : Data and AIA
-## Author/Team    : POC Team
-## Date           : 29th Oct 2025
-## Purpose        :
-##   Diagnostic Agent module for processing user-provided issue summaries through Azure AI Agent
-##   services and extracting the name of the relevant automation runbook.
-##
-##   Key Functionalities:
-##     - Connects to Azure Automation & Azure AI Agent services.
-##     - Sends issue text to a Diagnostic AI Agent.
-##     - Retrieves and returns the corresponding runbook name.
-##
-## Notes:
-##   - This file follows DSET-standardized structure, comments, naming, and logging.
-##   - No additional integrations added as per request.
-#################################################################################################
-
-
-# ###############  IMPORT PACKAGES  ###############
+import json
 import logging
-from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential, AzureCliCredential
-from azure.ai.agents.models import ListSortOrder
-from azure.mgmt.automation import AutomationClient
-
-import config
-from utils import create_new_runbook
-
-# Disable Azure SDK verbose logging
-logging.getLogger("azure").setLevel(logging.WARNING)
-logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
-# ###############  CONFIGURATION CONSTANTS  ###############
-SUBSCRIPTION_ID = config.SUBSCRIPTION_ID
-RESOURCE_GROUP = config.RESOURCE_GROUP
-AUTOMATION_ACCOUNT = config.AUTOMATION_ACCOUNT
-LOCATION = config.LOCATION
-
-# Default values for runbook creation
-SCRIPT_TEXT = "test"
-RUNBOOK_TYPE = "PowerShell"
-
-
-# ###############  LOGGING CONFIGURATION  ###############
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s"
-)
-logger = logging.getLogger("diagnostic_agent")
-
-
-# ###############  AZURE CLIENT INITIALIZATION  ###############
-# Authenticate using DefaultAzureCredential (Supports MI, CLI, Env)
-default_credential = DefaultAzureCredential()
-
-# Azure Automation client
-automation_client = AutomationClient(default_credential, SUBSCRIPTION_ID)
-
-# Azure AI Project client (CLI credential)
-ai_project_client = AIProjectClient(
-    credential=AzureCliCredential(),
-    endpoint=config.MODEL_ENDPOINT
-)
-
-# Fetch Diagnostic AI Agent instance
-diagnostic_agent = ai_project_client.agents.get_agent(config.DIAGNOSTIC_AGENT_ID)
-
-
-# ###############  FUNCTION: process_issue  ###############
-def process_issue(issue: str) -> str | None:
-    """
-    Sends an issue description to the Azure Diagnostic AI Agent and extracts the
-    recommended runbook name from the response messages.
-
-    Args:
-        issue (str):
-            The text describing the user's problem or issue.
-
-    Returns:
-        str | None:
-            The name of the runbook returned by the Diagnostic AI Agent,
-            or None if no runbook was found or processing failed.
-
-    Flow:
-        1. Create a new AI agent thread.
-        2. Add the issue text as a message.
-        3. Run the agent on the thread.
-        4. Retrieve and parse the resulting messages.
-    """
-    try:
-        logger.info("Processing diagnostic issue: %s", issue)
-
-        # Step 1: Create a new thread
-        thread = ai_project_client.agents.threads.create()
-        logger.debug("Created new diagnostic thread: %s", thread.id)
-
-        # Step 2: Send user message to the thread
-        ai_project_client.agents.messages.create(
-            thread_id=thread.id,
-            role="user",
-            content=issue
-        )
-        logger.debug("Posted issue message to diagnostic thread")
-
-        # Step 3: Run the diagnostic agent
-        run = ai_project_client.agents.runs.create_and_process(
-            thread_id=thread.id,
-            agent_id=diagnostic_agent.id
-        )
-
-        # Step 4: Handle run failure
-        if run.status == "failed":
-            logger.error("Diagnostic AI agent run failed: %s", run.last_error)
-            return None
-
-        # Step 5: Retrieve messages to extract runbook name
-        messages = ai_project_client.agents.messages.list(
-            thread_id=thread.id,
-            order=ListSortOrder.ASCENDING
-        )
-
-        runbook_name: str | None = None
-
-        for message in messages:
-            if message.text_messages:
-                # Assume the final text message contains the runbook name
-                runbook_name = message.text_messages[-1].text.value
-
-        # Step 6: Return runbook name if found
-        if runbook_name:
-            logger.info("Diagnostic agent returned runbook: %s", runbook_name)
-            return runbook_name
-
-        logger.info("No runbook name found in diagnostic agent response.")
-        return None
-
-    except Exception as exc:
-        logger.exception("Exception occurred while processing diagnostic issue: %s", exc)
-        return None
-
-
-
-
-#################################################################################################
-## Project Name   : Agentic AI POC
-## Business Owner : Data and AIA
-## Author/Team    : POC Team
-## Date           : 29th Oct 2025
-##
-## Purpose:
-##   Helper utilities that interact with Azure Automation to:
-##     - Retrieve runbook content (draft, published, or REST fallback)
-##     - Duplicate existing runbooks
-##     - Upload and publish new runbooks programmatically
-##
-## Notes:
-##   - This file follows DSET standardization.
-##   - No new features or workflow changes were introduced.
-#################################################################################################
-
-
-# ###############  IMPORTS  ###############
 import os
-import logging
-import requests
-from datetime import datetime
+import time
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, Tuple
 
-from azure.identity import DefaultAzureCredential
+import azure.functions as func
+from azure.eventhub import EventHubProducerClient, EventData
+
+# Azure SDKs
+from azure.identity import DefaultAzureCredential, AzureCliCredential
 from azure.mgmt.automation import AutomationClient
+from azure.ai.projects import AIProjectClient
+from azure.ai.agents.models import ListSortOrder
+import requests
 
-import config
+# optional: dotenv for local testing
+try:
+    from dotenv import load_dotenv
 
-# Disable Azure SDK verbose logging
+    load_dotenv()
+except Exception:
+    pass
+
+# ===== Logging setup
+logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("azure").setLevel(logging.WARNING)
-logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
-# ###############  LOGGING SETUP ###############
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s"
-)
-logger = logging.getLogger("automation_helpers")
+logger = logging.getLogger("AgenticDiagnosticFn")
 
+# ========================= Configuration dataclasses =========================
+@dataclass
+class AutomationConfig:
+    subscription_id: str
+    resource_group: str
+    automation_account: str
+    location: str
 
-# ###############  FUNCTION: get_source_content ###############
-def get_source_content(runbook_name: str) -> str | None:
+@dataclass
+class FoundryConfig:
+    endpoint: str
+    diagnostic_agent_id: str
+    troubleshoot_agent_id: str
+    deployment: str
+    api_version: str
+
+@dataclass
+class AppConfig:
+    environment: str
+    automation: AutomationConfig
+    foundry: FoundryConfig
+
+# ========================= Akeyless dictionary loader (placeholder) ==========
+def read_akeyless_dicts():
     """
-    Fetch the content of a runbook from Azure Automation using the REST API.
-    This method is used as fallback when draft/published versions cannot be retrieved.
-
-    Args:
-        runbook_name (str): Existing runbook name in Azure Automation.
-
-    Returns:
-        str | None: Script content if fetched successfully, else None.
+    Placeholder for reading secrets from Akeyless.
+    In your original code you returned dictionaries directly — keeping same behavior.
+    Replace this with actual akeyless client calls if needed.
     """
-    try:
-        credential = DefaultAzureCredential()
-        token = credential.get_token("https://management.azure.com/.default").token
+    logging.info("Reading configuration dictionaries from Akeyless (placeholder).")
 
-        # Construct REST API endpoint
+    Automation_Variable = {
+        "AZ_SUBSCRIPTION_ID": "4c85c528-9da9-48ac-a5c3-41bd351728eb",
+        "AZ_RESOURCE_GROUP": "rg-fbntf-ais-swce-poc",
+        "AZ_AUTOMATION_ACCOUNT": "aa-mbfin-ais-swce-poc",
+        "LOCATION": "Sweden Central",
+    }
+    Foundry_Variable = {
+        "Endpoint": "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc",
+        "Model_Name": "gpt-5-mini",
+        "Deployment": "ITOA-Service_Desk-Agentic_AI_POC-gpt-5-mini",
+        "API_Version": "2024-12-01-preview",
+        "DIAGNOSTIC_Agent_ID": "asst_MxWLoHuCHSwnPxyZfzUe2EOb",
+        "TROUBLESHOOT_Agent_ID": "asst_fP3eyPFbOQGjFvH7m909Kdi6",
+    }
+    logging.info("Akeyless dictionaries loaded successfully.")
+    return Foundry_Variable, Automation_Variable
+
+def load_config_from_akeyless() -> Tuple[AppConfig, Dict[str, Any], Dict[str, Any]]:
+    """
+    Build AppConfig from Akeyless dictionaries and environment.
+    """
+    app_env = os.environ.get("APP_ENV", "dev")
+    foundry_dict, automation_dict = read_akeyless_dicts()
+    automation_cfg = AutomationConfig(
+        subscription_id=automation_dict["AZ_SUBSCRIPTION_ID"],
+        resource_group=automation_dict["AZ_RESOURCE_GROUP"],
+        automation_account=automation_dict["AZ_AUTOMATION_ACCOUNT"],
+        location=automation_dict["LOCATION"],
+    )
+    foundry_cfg = FoundryConfig(
+        endpoint=foundry_dict["Endpoint"],
+        diagnostic_agent_id=foundry_dict["DIAGNOSTIC_Agent_ID"],
+        troubleshoot_agent_id=foundry_dict["TROUBLESHOOT_Agent_ID"],
+        deployment=foundry_dict["Deployment"],
+        api_version=foundry_dict["API_Version"],
+    )
+    config = AppConfig(environment=app_env, automation=automation_cfg, foundry=foundry_cfg)
+    return config, foundry_dict, automation_dict
+
+# ========================= Utilities & Validation ===========================
+def json_response(payload: Dict[str, Any], status: int = 200) -> func.HttpResponse:
+    """Consistent JSON response"""
+    return func.HttpResponse(
+        body=json.dumps(payload, default=str),
+        status_code=status,
+        mimetype="application/json",
+    )
+
+def validate_request_body(body: Dict[str, Any]) -> Tuple[str, bool, str, Optional[str], str]:
+    """
+    Expected Schema:
+    {
+        "issue" : "string, required",
+        "execute": true/false, optional, default= true,
+        "target_machine" : "string, required" ,
+        "session_id" : "string, optional"
+        "loggedin_username": "string, required"
+    }
+    """
+    issue = body.get("issue")
+    if not isinstance(issue, str) or not issue.strip():
+        raise ValueError("Field 'issue' is required and must be a non-empty string.")
+
+    execute = bool(body.get("execute", True))
+    target_machine = body.get("target_machine", "").strip() or "UNSPECIFIED"
+    session_id = body.get("session_id", None)
+    loggedin_username = body.get("loggedin_username", "")
+    if not isinstance(target_machine, str):
+        raise ValueError("Field 'target_machine' is required and must be a string.")
+    if not isinstance(loggedin_username, str) or not loggedin_username.strip():
+        raise ValueError("Field 'loggedin_username' is required and must be a non-empty string.")
+
+    return issue.strip(), execute, target_machine, session_id, loggedin_username.strip()
+
+def get_default_credential() -> DefaultAzureCredential:
+    """ Create a Default Azure Credential suitable for function apps."""
+    return DefaultAzureCredential(
+        exclude_interactive_browser_credential=True,
+        exclude_visual_studio_code_credential=True,
+        exclude_shared_token_cache_credential=True,
+        exclude_powershell_credential=True,
+    )
+
+# ========================= Event Hub Logger ===========================
+class EventHubLogger:
+    """
+    Wrapper for sending JSON events to Azure Event Hub (AAD auth).
+    """
+    def __init__(self, automation_dict: Dict[str, Any], credential: DefaultAzureCredential):
+        # you may wish to move namespace/name to akeyless
+        namespace = os.environ.get("EVENTHUB_NAMESPACE", "ehn-hrmqc-ais-swce-poc")
+        name = os.environ.get("EVENTHUB_NAME", "evh-okvkc-ais-swce-poc")
+
+        if not namespace or not name:
+            logging.warning("Event Hub namespace/name not configured. Event will not be sent.")
+            self.producer: Optional[EventHubProducerClient] = None
+            return
+
+        try:
+            self.producer = EventHubProducerClient(
+                fully_qualified_namespace=namespace, eventhub_name=name, credential=credential
+            )
+            logging.info("Event Hub Logger initialised for hub '%s'.", name)
+        except Exception:
+            logging.exception("Failed to initialise Eventhub producer client.")
+            self.producer = None
+
+    def send_event(self, event: Dict[str, Any]) -> None:
+        if not self.producer:
+            return
+        try:
+            payload = json.dumps(event, default=str)
+            event_data = EventData(payload)
+            with self.producer:
+                batch = self.producer.create_batch()
+                batch.add(event_data)
+                self.producer.send_batch(batch)
+            logging.info("Event sent to Event Hub: %s", event.get("event_type"))
+        except Exception:
+            logging.exception("Failed to send event to eventhub.")
+
+# ========================= Azure Automation Service ===========================
+class AzureautomationService:
+    """Wrapper around azure automation operations (Runbook CRUD, REST content)."""
+
+    def __init__(self, config: AutomationConfig, credential: DefaultAzureCredential):
+        self.config = config
+        self.credential = credential
+        self.client = AutomationClient(credential, config.subscription_id)
+
+    def get_rest_token(self) -> str:
+        token = self.credential.get_token("https://management.azure.com/.default").token
+        return token
+
+    def fetch_runbook_content(self, runbook_name: str) -> Optional[str]:
+        """
+        Fetch runbook content via REST API (fallback).
+        """
+        token = self.get_rest_token()
         url = (
-            f"https://management.azure.com/subscriptions/{config.SUBSCRIPTION_ID}"
-            f"/resourceGroups/{config.RESOURCE_GROUP}"
-            f"/providers/Microsoft.Automation/automationAccounts/{config.AUTOMATION_ACCOUNT}"
+            f"https://management.azure.com/subscriptions/{self.config.subscription_id}"
+            f"/resourceGroups/{self.config.resource_group}"
+            f"/providers/Microsoft.Automation/automationAccounts/{self.config.automation_account}"
             f"/runbooks/{runbook_name}/content?api-version=2024-10-23"
         )
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/octet-stream"
-        }
-
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/octet-stream"}
         response = requests.get(url, headers=headers)
-
         if response.status_code == 200:
-            content = response.content.decode("utf-8", errors="ignore")
-            logger.info("Fetched runbook content via REST API: '%s'", runbook_name)
-            return content
-
-        logger.error(
-            "Failed REST content fetch for '%s': %s - %s",
+            logging.info("Fetched content for runbook '%s'.", runbook_name)
+            return response.content.decode("utf-8", errors="ignore")
+        logging.warning(
+            "Failed to fetch content for runbook '%s'. status: %s, Body: %s",
             runbook_name,
             response.status_code,
-            response.text
+            response.text,
         )
         return None
 
-    except Exception as exc:
-        logger.exception("Exception while fetching runbook content via REST: %s", exc)
-        return None
-
-
-# ###############  FUNCTION: create_new_runbook ###############
-def create_new_runbook(runbook_name: str, system_name: str) -> None:
-    """
-    Creates a new Azure Automation runbook by duplicating content from an existing runbook.
-    If neither draft nor published content exists, an auto-generated placeholder script is used.
-
-    Args:
-        runbook_name (str): The existing runbook to copy.
-        system_name (str): System identifier appended to the new runbook name.
-
-    Returns:
-        None
-    """
-    credential = DefaultAzureCredential()
-    client = AutomationClient(credential, config.SUBSCRIPTION_ID)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    os.makedirs("generated_runbooks", exist_ok=True)
-
-    new_runbook_name = f"{runbook_name}_{system_name}_{timestamp}"
-    file_name = f"{new_runbook_name}.ps1"
-    file_path = os.path.join("generated_runbooks", file_name)
-
-    logger.info("Retrieving script content for source runbook: '%s'", runbook_name)
-
-    source_script = None
-
-    # --------------------------------------------------------------------------
-    # Attempt 1: Retrieve draft version
-    # --------------------------------------------------------------------------
-    try:
-        content_stream = client.runbook_draft.get_content(
-            resource_group_name=config.RESOURCE_GROUP,
-            automation_account_name=config.AUTOMATION_ACCOUNT,
-            runbook_name=runbook_name
+    def create_or_update_runbook(self, runbook_name: str, runbook_content: str):
+        """
+        Create or update a runbook, upload draft content and publish it.
+        Then start a job on Hybrid Worker Group.
+        Returns (job_name, job_id)
+        """
+        logging.info("Creating or updating runbook '%s'.", runbook_name)
+        runbook = self.client.runbook.create_or_update(
+            resource_group_name=self.config.resource_group,
+            automation_account_name=self.config.automation_account,
+            runbook_name=runbook_name,
+            parameters={
+                "location": self.config.location,
+                "properties": {"runbookType": "PowerShell", "logProgress": False, "logVerbose": False},
+            },
         )
+        logging.info("Runbook metadata ensured for '%s'.Resource ID: %s", runbook_name, getattr(runbook, "id", None))
+        # upload draft
+        draft_poller = self.client.runbook_draft.begin_replace_content(
+            resource_group_name=self.config.resource_group,
+            automation_account_name=self.config.automation_account,
+            runbook_name=runbook_name,
+            runbook_content=runbook_content,
+        )
+        draft_poller.result()
+        logging.info("Runbook draft content uploaded for '%s'", runbook_name)
+        # publish
+        publish_poller = self.client.runbook.begin_publish(
+            resource_group_name=self.config.resource_group,
+            automation_account_name=self.config.automation_account,
+            runbook_name=runbook_name,
+        )
+        publish_poller.result()
+        logging.info("Runbook '%s' published successfully.", runbook_name)
+        # start job
+        job_name = f"job_{runbook_name}_{int(datetime.utcnow().timestamp())}"
+        job = self.client.job.create(
+            resource_group_name=self.config.resource_group,
+            automation_account_name=self.config.automation_account,
+            job_name=job_name,
+            parameters={
+                "properties": {"runbook": {"name": runbook_name}, "parameters": {}, "runOn": "Agentic_AI_POC_SCCM"}
+            },
+        )
+        logging.info("Runbook execution started on Hybrid Worker Group. Job ID = %s", job.id)
+        return job_name, getattr(job, "job_id", getattr(job, "id", None))
 
-        if hasattr(content_stream, "read"):
-            source_script = content_stream.read().decode("utf-8")
-        else:
-            source_script = str(content_stream)
-
-        logger.info("Draft content retrieved successfully for '%s'", runbook_name)
-
-    except Exception as exc:
-        logger.warning("Draft version unavailable for '%s': %s", runbook_name, exc)
-
-    # --------------------------------------------------------------------------
-    # Attempt 2: Retrieve published version
-    # --------------------------------------------------------------------------
-    if not source_script:
-        try:
-            content_stream = client.runbook.get_content(
-                resource_group_name=config.RESOURCE_GROUP,
-                automation_account_name=config.AUTOMATION_ACCOUNT,
-                runbook_name=runbook_name
+    def get_runbook_output(self, job_name: str, job_id: str) -> Optional[str]:
+        """
+        Poll job status until it's completed and then fetch job output via REST.
+        """
+        # Poll until job completes
+        while True:
+            job = self.client.job.get(
+                resource_group_name=self.config.resource_group,
+                automation_account_name=self.config.automation_account,
+                job_name=job_name,
             )
+            job_status = getattr(job, "status", "").lower()
+            if job_status in ["completed", "failed", "stopped"]:
+                break
+            time.sleep(5)
 
+        token = self.get_rest_token()
+        output_url = (
+            f"https://management.azure.com/subscriptions/{self.config.subscription_id}"
+            f"/resourceGroups/{self.config.resource_group}"
+            f"/providers/Microsoft.Automation/automationAccounts/{self.config.automation_account}"
+            f"/jobs/{job_id}/output?api-version=2023-11-01"
+        )
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/octet-stream"}
+        response = requests.get(output_url, headers=headers)
+        if response.status_code == 200:
+            logging.info("Fetched output for the job '%s'.", job_id)
+            return response.text
+        logging.warning("Failed to fetch the output '%s'. status: %s, Body: %s", job_id, response.status_code, response.text)
+        return None
+
+    def clone_runbook_with_metadata(
+        self, source_runbook_name: str, system_name: str, issue_text: str, environment: str, session_id: Optional[str], loggedin_username: str
+    ):
+        """
+        Clone a runbook, annotate with metadata and execute.
+        Returns (new_runbook_name, job_name, job_id)
+        """
+        original_content = self.fetch_runbook_content(source_runbook_name)
+        if original_content is None:
+            # attempt to fetch draft/published via SDK instead of REST
+            try:
+                draft_stream = self.client.runbook_draft.get_content(
+                    resource_group_name=self.config.resource_group,
+                    automation_account_name=self.config.automation_account,
+                    runbook_name=source_runbook_name,
+                )
+                if hasattr(draft_stream, "read"):
+                    original_content = draft_stream.read().decode("utf-8")
+                else:
+                    original_content = str(draft_stream)
+            except Exception:
+                original_content = None
+
+        if original_content is None:
+            raise ValueError(f"No content returned for runbook '{source_runbook_name}'")
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        new_runbook_name = f"{source_runbook_name}_{system_name}_{session_id or timestamp}"
+
+        header_block = [
+            f"# Generated by Agentic Automation Team",
+            f"$ScriptName = '{new_runbook_name}'",
+            f"$DeviceName = '{system_name}'",
+            f'$Loggedin_Username = "{loggedin_username}"',
+            "Import-Module ($Env:SMS_ADMIN_UI_PATH.Substring(0,$Env:SMS_ADMIN_UI_PATH.Length-5) + '\\ConfigurationManager.psd1')",
+            "cd CBL:",
+            "# Step 1: Inline script content",
+            "$scriptText = @'",
+            original_content,
+            "'@",
+        ]
+        annotated_content = "\n".join(header_block)
+
+        job_name, job_id = self.create_or_update_runbook(new_runbook_name, annotated_content)
+        return new_runbook_name, job_name, job_id
+
+    # optional: test user comparison (kept from your original)
+    def test_user_comparison(self, tevacorp_user_id):
+        tevacorp_testcorp_comparison_dictionary = {
+            "PRA01": "TestPrashanth",
+            "ARR02": "TestArchudan",
+            "NRODRIGUES": "TestNatasha",
+            "RSRINIVASA02": "TestRakesh",
+            "NHADIMANI": "TestNidhi",
+            "MMENJIVA": "TestMaynor",
+            "MAADAMS": "TestMalcolm",
+            "BWARNER": "TestBrian",
+            "SROWDEN": "TestSteven",
+            "AATAK": "TestAleyna",
+            "MYENI": "TestMert",
+            "ASHEINFELD": "TestAviram",
+            "EGILBOA01": "TestEli",
+            "CSALGADO02": "TestCassandra",
+            "BAGUILAR": "TestBetsabe",
+            "HSHAH11": "TestHarsh",
+            "KER01": "GLSDUser1",
+            "VPRAKASH07": "GLSDUser1",
+            "KDAS": "GLSDUser1",
+            "VJADHAV08": "GLSDUser1",
+            "LSOJIC": "GLSDUser1",
+        }
+        if tevacorp_user_id and tevacorp_user_id.upper() in tevacorp_testcorp_comparison_dictionary:
+            return tevacorp_testcorp_comparison_dictionary[tevacorp_user_id.upper()]
+        else:
+            return (tevacorp_user_id or "").upper()
+
+# ========================= Azure AI Foundry Agent Service ===========================
+class FoundryAgentService:
+    """
+    Wrapper for interacting with Azure AI Foundry agents.
+    """
+    def __init__(self, config: FoundryConfig, credential: DefaultAzureCredential):
+        self.config = config
+        # Use Default credential for production; AzureCliCredential may be used locally
+        try:
+            self.project = AIProjectClient(endpoint=config.endpoint, credential=credential)
+            # Diagnostic agent by id
+            self.diagnostic_agent = self.project.agents.get_agent(self.config.diagnostic_agent_id)
+            self.troubleshoot_agent = self.project.agents.get_agent(self.config.troubleshoot_agent_id)
+        except Exception:
+            logging.exception("Failed to initialize Foundry AIProjectClient.")
+            raise
+
+    def resolve_runbook_from_issue(self, issue_text: str) -> Tuple[Optional[str], Dict[str, str]]:
+        """
+        Sends the issue to the diagnostic agent and expects a final message
+        that contains the resolved runbook name.
+        Returns (resolved_runbook_name, Resolve_Logger)
+        """
+        Resolve_Logger = {}
+        try:
+            logging.info("Sending issue to Foundry diagnostic agent.")
+            Resolve_Logger["Thread_Start"] = datetime.utcnow().isoformat() + "Z"
+            thread = self.project.agents.threads.create()
+            Resolve_Logger["Thread_End"] = datetime.utcnow().isoformat() + "Z"
+
+            Resolve_Logger["Message_Start"] = datetime.utcnow().isoformat() + "Z"
+            self.project.agents.messages.create(thread_id=thread.id, role="user", content=issue_text)
+            Resolve_Logger["Message_End"] = datetime.utcnow().isoformat() + "Z"
+
+            Resolve_Logger["Run_Start"] = datetime.utcnow().isoformat() + "Z"
+            run = self.project.agents.runs.create_and_process(thread_id=thread.id, agent_id=self.diagnostic_agent.id)
+            Resolve_Logger["Run_End"] = datetime.utcnow().isoformat() + "Z"
+
+            if run.status == "failed":
+                logging.error("Foundry run failed.")
+                return None, Resolve_Logger
+
+            Resolve_Logger["Order_Start"] = datetime.utcnow().isoformat() + "Z"
+            messages = self.project.agents.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
+            Resolve_Logger["Order_End"] = datetime.utcnow().isoformat() + "Z"
+
+            resolved_runbook_name: Optional[str] = None
+            Resolve_Logger["Msg_Read_Start"] = datetime.utcnow().isoformat() + "Z"
+            for message in messages:
+                if getattr(message, "text_messages", None):
+                    resolved_runbook_name = message.text_messages[-1].text.value
+            Resolve_Logger["Msg_Read_End"] = datetime.utcnow().isoformat() + "Z"
+
+            if resolved_runbook_name:
+                logging.info("Foundry diagnostic agent resolved runbook '%s'.", resolved_runbook_name)
+            else:
+                logging.warning("Foundry diagnostic agent did not return a runbook name.")
+            return resolved_runbook_name, Resolve_Logger
+        except Exception:
+            logging.exception("Exception while resolving runbook via Foundry.")
+            return None, Resolve_Logger
+
+    def troubleshoot_runbook_from_issue(self, issue_text: str) -> Tuple[Optional[str], Optional[str], Dict[str, str]]:
+        """
+        Similar to resolve_runbook_from_issue but uses the troubleshooting agent
+        Returns (runbook_name, full_description, logger)
+        """
+        Resolve_Logger = {}
+        try:
+            logging.info("Sending issue to Foundry troubleshooting agent.")
+            Resolve_Logger["Thread_Start"] = datetime.utcnow().isoformat() + "Z"
+            thread = self.project.agents.threads.create()
+            Resolve_Logger["Thread_End"] = datetime.utcnow().isoformat() + "Z"
+
+            Resolve_Logger["Message_Start"] = datetime.utcnow().isoformat() + "Z"
+            self.project.agents.messages.create(thread_id=thread.id, role="user", content=issue_text)
+            Resolve_Logger["Message_End"] = datetime.utcnow().isoformat() + "Z"
+
+            Resolve_Logger["Run_Start"] = datetime.utcnow().isoformat() + "Z"
+            run = self.project.agents.runs.create_and_process(thread_id=thread.id, agent_id=self.troubleshoot_agent.id)
+            Resolve_Logger["Run_End"] = datetime.utcnow().isoformat() + "Z"
+
+            if run.status == "failed":
+                logging.error("Troubleshooting agent run failed.")
+                return None, None, Resolve_Logger
+
+            messages = self.project.agents.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
+            runbook_name = None
+            full_description = None
+            for message in messages:
+                if getattr(message, "text_messages", None):
+                    # for troubleshooting we expect the agent to return two parts:
+                    # first a runbook name and optionally a fuller description in the same or subsequent message.
+                    # We'll pick the last text message as full_description, and if text looks like a runbook name, set runbook_name.
+                    last_text = message.text_messages[-1].text.value
+                    full_description = last_text
+                    if not runbook_name:
+                        # a simple heuristic: runbook names often look like words_with_underscores or start with "RB_"
+                        if "runbook" in last_text.lower() or "_" in last_text or last_text.strip().isidentifier():
+                            runbook_name = last_text.strip()
+            return runbook_name, full_description, Resolve_Logger
+        except Exception:
+            logging.exception("Exception while troubleshooting via Foundry.")
+            return None, None, Resolve_Logger
+
+# ========================= Troubleshooting & Diagnostic helpers (local) =========================
+# This block consolidates the code you shared for diagnostic/troubleshooting and the create_new_runbook helper.
+
+# --- Configuration short-hands for helper functions (kept dynamic) ---
+CONFIG_CACHE: Optional[AppConfig] = None
+
+def get_config():
+    global CONFIG_CACHE
+    if CONFIG_CACHE:
+        return CONFIG_CACHE
+    cfg, foundry_dict, automation_dict = load_config_from_akeyless()
+    CONFIG_CACHE = cfg
+    return CONFIG_CACHE
+
+# Diagnostic wrapper (keeps name from both code blocks)
+def diagnostic_process_issue(issue_text: str) -> Optional[str]:
+    """
+    Wrapper that uses Foundry diagnostic agent to resolve runbook name.
+    Returns runbook_name or None.
+    """
+    try:
+        cfg = get_config()
+        credential = get_default_credential()
+        foundry = FoundryAgentService(cfg.foundry, credential)
+        runbook_name, logger_struct = foundry.resolve_runbook_from_issue(issue_text)
+        return runbook_name
+    except Exception:
+        logging.exception("diagnostic_process_issue failed.")
+        return None
+
+def troubleshooting_process_issue(issue_text: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Wrapper that uses Foundry troubleshooting agent to get runbook and description.
+    """
+    try:
+        cfg = get_config()
+        credential = get_default_credential()
+        foundry = FoundryAgentService(cfg.foundry, credential)
+        runbook_name, full_desc, _ = foundry.troubleshoot_runbook_from_issue(issue_text)
+        return runbook_name, full_desc
+    except Exception:
+        logging.exception("troubleshooting_process_issue failed.")
+        return None, None
+
+# create_new_runbook helper (adapted from your utils)
+def create_new_runbook(runbook_name: str, system_name: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Create a new runbook in the automation account by copying content from existing runbook.
+    Returns (job_name, job_id) if executed or (None, None) on error.
+    """
+    try:
+        cfg = get_config()
+        credential = get_default_credential()
+        client = AutomationClient(credential, cfg.automation.subscription_id)
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        new_runbook_name = f"{runbook_name}_{system_name}_{timestamp}"
+
+        # Attempt: get draft content via SDK
+        source_script = None
+        try:
+            content_stream = client.runbook_draft.get_content(
+                resource_group_name=cfg.automation.resource_group,
+                automation_account_name=cfg.automation.automation_account,
+                runbook_name=runbook_name,
+            )
             if hasattr(content_stream, "read"):
                 source_script = content_stream.read().decode("utf-8")
             else:
                 source_script = str(content_stream)
+            logging.info("Draft content retrieved successfully for '%s'", runbook_name)
+        except Exception:
+            logging.info("Draft not available, trying published content or REST.")
 
-            logger.info("Published content retrieved successfully for '%s'", runbook_name)
+        # Try published content
+        if not source_script:
+            try:
+                content_stream = client.runbook.get_content(
+                    resource_group_name=cfg.automation.resource_group,
+                    automation_account_name=cfg.automation.automation_account,
+                    runbook_name=runbook_name,
+                )
+                if hasattr(content_stream, "read"):
+                    source_script = content_stream.read().decode("utf-8")
+                else:
+                    source_script = str(content_stream)
+                logging.info("Published content retrieved successfully for '%s'", runbook_name)
+            except Exception:
+                logging.info("Published not available, trying REST fallback.")
+                source_script = None
 
-        except Exception as exc:
-            logger.warning("Published content unavailable for '%s': %s", runbook_name, exc)
-            logger.info("Attempting REST API fallback...")
-            source_script = get_source_content(runbook_name)
+        if not source_script:
+            # REST fallback
+            helper = AzureautomationService(cfg.automation, credential)
+            source_script = helper.fetch_runbook_content(runbook_name)
 
-    # --------------------------------------------------------------------------
-    # Fallback: Generate empty placeholder script
-    # --------------------------------------------------------------------------
-    if not source_script:
-        source_script = (
-            f"# Auto-generated Runbook\n"
-            f"# Name: {file_name}\n"
-            f"# System: {system_name}\n"
-            f"# Created: {timestamp}\n\n"
-            f"Write-Output 'Running {file_name}'\n"
-        )
-        logger.info("No source content found. Using placeholder script.")
+        if not source_script:
+            # generate placeholder
+            source_script = (
+                f"# Auto-generated Runbook\n# Name: {new_runbook_name}\n# System: {system_name}\n# Created: {timestamp}\n\n"
+                f"Write-Output 'Running {new_runbook_name}'\n"
+            )
+            logging.info("No source found. Using placeholder script for new runbook.")
 
-    # --------------------------------------------------------------------------
-    # Write script content locally
-    # --------------------------------------------------------------------------
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(source_script)
+        # Create runbook and publish & execute
+        az_service = AzureautomationService(cfg.automation, credential)
+        # prepare annotated content similar to clone method
+        header_block = [
+            f"# Generated by Agentic Automation Team",
+            f"$ScriptName = '{new_runbook_name}'",
+            f"$DeviceName = '{system_name}'",
+            f"# Created: {timestamp}",
+            "$scriptContent = @'",
+            source_script,
+            "'@",
+        ]
+        final_content = "\n".join(header_block)
+        job_name, job_id = az_service.create_or_update_runbook(new_runbook_name, final_content)
+        return job_name, job_id
+    except Exception:
+        logging.exception("create_new_runbook failed.")
+        return None, None
 
-    logger.info("Runbook script saved locally at: %s", file_path)
+# Pending confirmations used by troubleshooting analyze
+PENDING_CONFIRMATIONS: Dict[str, Dict[str, Any]] = {}
+PENDING_TTL_SECONDS = int(os.environ.get("PENDING_TTL_SECONDS", "300"))
+PENDING_LOCK = None  # thread-safe lock can be used if concurrency is needed
 
-    # --------------------------------------------------------------------------
-    # Step 1: Create a new runbook in Azure Automation
-    # --------------------------------------------------------------------------
-    try:
-        created_runbook = client.runbook.create_or_update(
-            resource_group_name=config.RESOURCE_GROUP,
-            automation_account_name=config.AUTOMATION_ACCOUNT,
-            runbook_name=new_runbook_name,
-            parameters={
-                "location": config.LOCATION,
-                "name": new_runbook_name,
-                "properties": {
-                    "runbookType": "PowerShell",
-                    "logProgress": False,
-                    "logVerbose": False,
-                },
-            },
-        )
+def cleanup_expired_pending():
+    now = datetime.utcnow()
+    to_delete = []
+    for k, v in list(PENDING_CONFIRMATIONS.items()):
+        if v.get("expires_at") and v["expires_at"] < now:
+            to_delete.append(k)
+    for k in to_delete:
+        del PENDING_CONFIRMATIONS[k]
 
-        logger.info("Runbook created in Azure Automation: %s", created_runbook.name)
-
-    except Exception as exc:
-        logger.error("Failed to create new runbook '%s': %s", new_runbook_name, exc)
-        return
-
-    # --------------------------------------------------------------------------
-    # Step 2: Upload draft content
-    # --------------------------------------------------------------------------
-    try:
-        poller = client.runbook_draft.begin_replace_content(
-            resource_group_name=config.RESOURCE_GROUP,
-            automation_account_name=config.AUTOMATION_ACCOUNT,
-            runbook_name=new_runbook_name,
-            runbook_content=source_script
-        )
-        poller.result()
-
-        logger.info("Runbook content uploaded successfully: %s", file_name)
-
-    except Exception as exc:
-        logger.error("Failed to upload content for runbook '%s': %s", new_runbook_name, exc)
-
-    # --------------------------------------------------------------------------
-    # Step 3: Publish runbook
-    # --------------------------------------------------------------------------
-    try:
-        client.runbook.begin_publish(
-            resource_group_name=config.RESOURCE_GROUP,
-            automation_account_name=config.AUTOMATION_ACCOUNT,
-            runbook_name=new_runbook_name
-        ).result()
-
-        logger.info("Runbook published successfully: %s", file_name)
-
-    except Exception as exc:
-        logger.error("Failed to publish runbook '%s': %s", new_runbook_name, exc)
-
- # --------------------------------------------------------------------------
-    # Step 4: EXECUTE RUNBOOK ON AZURE (NEWLY ADDED)
- # --------------------------------------------------------------------------
-    try:
-        job_name = f"job_{new_runbook_name}_{timestamp}"
-
-        logger.info("Starting runbook execution on Hybrid Worker Group: %s", new_runbook_name)
-
-        job = client.job.create(
-            resource_group_name=config.RESOURCE_GROUP,
-            automation_account_name=config.AUTOMATION_ACCOUNT,
-            job_name=job_name,
-            parameters={
-                "properties": {
-                    "runbook": {"name": new_runbook_name},
-                    "parameters": {},  # no params passed
-                    "runOn": "Agentic_AI_POC_SCCM"   # <-- 🔥 IMPORTANT
-                }
-            }
-        )
-
-        logger.info(
-            "Runbook execution started on Hybrid Worker Group. Job ID = %s",
-            job.id
-        )
-
-    except Exception as exc:
-        logger.error("Failed to execute runbook '%s' on Hybrid Worker Group: %s", new_runbook_name, exc)
-
-
-# ###############  FUNCTION: get_output_by_runbook_name ###############
-def get_runbook_output_by_job_id(job_id: str) -> str:
+# ========================= Azure Function entrypoint =========================
+def main(req: func.HttpRequest) -> func.HttpResponse:
     """
-    Fetch Azure Automation runbook output using JOB ID.
-    Works for all regions including Sweden Central.
+    Single Azure Function that routes to:
+      POST /diagnostic/chat
+      POST /troubleshooting/analyze
+
+    We capture the entire path using a wildcard route parameter (see function.json).
     """
+    correlation_id = req.headers.get("x-correlation-id", str(uuid.uuid4()))
+    logging.info("Request received for Agentic Automation function. CORRELATIONID = %s", correlation_id)
+    time_logger = {}
     try:
-        credential = DefaultAzureCredential()
-        token = credential.get_token("https://management.azure.com/.default").token
+        # Parse JSON body
+        try:
+            time_logger["JSON_Parser_Start"] = datetime.utcnow().isoformat() + "Z"
+            request_body = req.get_json()
+            time_logger["JSON_Parser_End"] = datetime.utcnow().isoformat() + "Z"
+        except ValueError:
+            logging.warning("Invalid JSON in request body.")
+            return json_response({"Success": False, "error": {"message": "Invalid JSON payload."}}, status=400)
 
-        # API version for Sweden Central
-        api_version = "2023-11-01"
+        # Validate required fields (we reuse your validate_request_body)
+        try:
+            time_logger["Schema_Validation_Start"] = datetime.utcnow().isoformat() + "Z"
+            issue, execute, target_machine, session_id, loggedin_username = validate_request_body(request_body)
+            time_logger["Schema_Validation_End"] = datetime.utcnow().isoformat() + "Z"
+        except ValueError as value_error:
+            logging.warning("Request validation failed: %s", value_error)
+            return json_response({"Success": False, "error": {"message": str(value_error)}}, status=400)
 
-        output_url = (
-            f"https://management.azure.com/subscriptions/{config.SUBSCRIPTION_ID}"
-            f"/resourceGroups/{config.RESOURCE_GROUP}"
-            f"/providers/Microsoft.Automation/automationAccounts/{config.AUTOMATION_ACCOUNT}"
-            f"/jobs/{job_id}/output?api-version={api_version}"
-        )
+        # Load configuration
+        try:
+            time_logger["Config_Start"] = datetime.utcnow().isoformat() + "Z"
+            config_obj, foundey_dict, automation_dict = load_config_from_akeyless()
+            time_logger["Config_End"] = datetime.utcnow().isoformat() + "Z"
+        except Exception as environment_error:
+            logging.exception("Configuration loading failed.")
+            return json_response({"Success": False, "error": {"message": "Configuration error.", "details": str(environment_error)}}, status=500)
 
-        headers = {"Authorization": f"Bearer {token}"}
+        credential = get_default_credential()
+        automation_service = AzureautomationService(config_obj.automation, credential)
+        # Foundry service created lazily per call in wrappers (to isolate per-call errors)
+        event_logger = EventHubLogger(automation_dict, credential)
 
-        resp = requests.get(output_url, headers=headers)
+        # Route determination - read the path wildcard from route params
+        path = req.route_params.get("path", "") or req.url.split(req.route_params.get("function", "") or "")[-1]
+        # normalize path - trim leading/trailing slashes
+        path = path.strip("/").lower()
 
-        if resp.status_code != 200:
-            raise Exception(f"Failed to fetch job output: {resp.text}")
+        # Log Issue Received
+        event_logger.send_event({"event_type": "issue_received", "correlation_id": correlation_id, "environment": config_obj.environment, "target_machine": target_machine, "execute": execute, "timestamp_utc": datetime.utcnow().isoformat() + "Z"})
 
-        return resp.text
+        # Diagnostic route: diagnostic/chat
+        if path == "diagnostic/chat" or path.endswith("/diagnostic/chat"):
+            # Resolve runbook using Foundry agent
+            runbook_name = diagnostic_process_issue(issue)
+            if not runbook_name:
+                event_logger.send_event({"event_type": "Runbook Resolution Failed", "correlation_id": correlation_id, "environment": config_obj.environment, "timestamp_utc": datetime.utcnow().isoformat() + "Z"})
+                return json_response({"Success": False, "error": {"message": "No Runbook could be resolved for the given issue. Please contact the agentic AI POC team."}}, status=404)
 
-    except Exception as exc:
-        logger.exception("Error fetching job output: %s", exc)
-        raise
+            # Optionally clone and run
+            try:
+                cloned_name, job_name, job_id = automation_service.clone_runbook_with_metadata(
+                    source_runbook_name=runbook_name,
+                    system_name=target_machine,
+                    issue_text=issue,
+                    environment=config_obj.environment,
+                    session_id=session_id,
+                    loggedin_username=loggedin_username,
+                )
+            except Exception as unknown_exception:
+                logging.exception("Runbook cloning failed.")
+                event_logger.send_event({"event_type": "Runbook Clone Failed", "correlation_id": correlation_id, "environment": config_obj.environment, "Original Runbook": runbook_name, "error": str(unknown_exception), "timestamp_utc": datetime.utcnow().isoformat() + "Z"})
+                return json_response({"Success": False, "error": {"message": "Runbook cloning or publishing failed.", "details": str(unknown_exception)}}, status=502)
+
+            logging.info("Runbook cloned successfully: %s", cloned_name)
+            event_logger.send_event({"event_type": "Runbook cloned successfully", "correlation_id": correlation_id, "environment": config_obj.environment, "Original Runbook": runbook_name, "Cloned_Runbook": cloned_name, "target_machine": target_machine, "timestamp_utc": datetime.utcnow().isoformat() + "Z"})
+
+            return json_response({"Success": True, "original_runbook_name": runbook_name, "cloned_runbook_name": cloned_name, "job_name": job_name, "job_id": job_id, "executed": True, "target_machine": target_machine, "environment": config_obj.environment, "message": "Diagnosis process has been triggered.", "Time_Logger": time_logger}, status=200)
+
+        # Troubleshooting route: troubleshooting/analyze
+        elif path == "troubleshooting/analyze" or path.endswith("/troubleshooting/analyze"):
+            # cleanup expired
+            cleanup_expired_pending()
+            runbook_name, full_description = troubleshooting_process_issue(issue)
+            if not runbook_name:
+                event_logger.send_event({"event_type": "Troubleshoot Resolution Failed", "correlation_id": correlation_id, "environment": config_obj.environment, "timestamp_utc": datetime.utcnow().isoformat() + "Z"})
+                return json_response({"Success": False, "error": {"message": "No Runbook could be resolved for troubleshooting."}}, status=404)
+
+            if execute:
+                PENDING_CONFIRMATIONS[target_machine] = {"runbook_name": runbook_name, "full_text": full_description, "expires_at": datetime.utcnow() + timedelta(seconds=PENDING_TTL_SECONDS)}
+
+            return json_response({"Success": True, "runbook_name": runbook_name, "full_description": full_description, "execute_pending": execute, "Time_Logger": time_logger}, status=200)
+
+        else:
+            return json_response({"Success": False, "error": {"message": f"Unsupported path: {path}"}}, status=404)
+
+    except Exception as unhandled_exception:
+        logging.exception("Unhandled exception in agentic automation function.")
+        return json_response({"Success": False, "error": {"message": "Unhandled Server error. Please contact the automation team.", "details": str(unhandled_exception)}}, status=500)
