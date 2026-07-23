@@ -1,0 +1,594 @@
+#####################################################################################
+## Project name : Multilingual Service Desk Agent (Agentic AI POC)                  #
+## Business owner , Team : Data and AIA                                             #
+## Code Author , Team : POC Team                                                    #
+## Date: 15th Jul 2026                                                              #
+## Purpose of Function:                                                             #
+##  HTTP-triggered Azure Function that exposes ONE endpoint with TWO modes,         #
+##  selected by the 'agent' field in the request:                                   #
+##                                                                                  #
+##    agent = 'detect'    -> returns ONLY the detected language of 'message'        #
+##                           [offline, deterministic, no LLM].                      #
+##    agent = 'translate' -> translates 'message' into the target 'lang' using      #
+##                           the Azure AI Foundry 'multilingual-agent'.             #
+##                                                                                  #
+## IMPORTANT (auth): the Foundry 'projects' endpoint uses Microsoft Entra ID only. #
+## The Function App's Managed Identity MUST live in the SAME tenant as the Foundry  #
+## project (e.g. Teva) and be granted the 'Azure AI User' role on that project.     #
+## A managed identity cannot authenticate across tenants, and API keys do NOT work  #
+## for this endpoint.                                                               #
+#####################################################################################
+
+# # Load all the libraries
+import json
+import logging
+import os
+import re
+import uuid
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
+
+import azure.functions as func
+
+# Auth / SDKs
+from azure.identity import DefaultAzureCredential
+
+# Azure AI Projects [Foundry Agent Service — v2 SDK, azure-ai-projects>=2.1.0].
+# v2 removed the Assistants-style threads/runs/list_agents API. Agents are now
+# referenced by NAME and driven through the OpenAI-compatible Responses API that
+# project.get_openai_client() returns.
+from azure.ai.projects import AIProjectClient
+
+
+#=============================Logging Setup========================================================
+# Azure Function configures the root logger but we are ensuring the level.
+logging.getLogger().setLevel(logging.INFO)
+
+
+#=============================Data Class Module====================================================
+@dataclass
+class FoundryConfig:
+    """Configuration required for Azure AI Foundry interactions."""
+    endpoint: str
+    agent_name: str
+
+
+@dataclass
+class AppConfig:
+    """Configuration object for the function."""
+    environment: str
+    foundry: FoundryConfig
+
+
+#=========================================Helpers: Loading Configuration===========================
+def load_config() -> AppConfig:
+    """
+    Build AppConfig from environment variables (App Settings) with safe defaults.
+
+    Everything is overridable WITHOUT a code redeploy — set these in the Function
+    App -> Configuration -> Application settings:
+        FOUNDRY_ENDPOINT    - the Teva Foundry PROJECT endpoint
+        FOUNDRY_AGENT_NAME  - agent display name (default 'multilingual-agent')
+        ENVIRONMENT         - free-text label for the response (default 'dev')
+
+    Note: the v2 SDK references agents by NAME, so FOUNDRY_AGENT_ID is no longer
+    used (the old id-based lookup does not exist in azure-ai-projects 2.x).
+    """
+    logging.info("Loading configuration.")
+    foundry_cfg = FoundryConfig(
+        endpoint=os.getenv(
+            "FOUNDRY_ENDPOINT",
+            "https://aifoundry-rjteh-ais-swce-poc.services.ai.azure.com/api/projects/aifp-uqqnf-ais-swce-poc",
+        ),
+        agent_name=os.getenv("FOUNDRY_AGENT_NAME", "multilingual-agent"),
+    )
+    return AppConfig(environment=os.getenv("ENVIRONMENT", "dev"), foundry=foundry_cfg)
+
+
+#==============================================Utilities===========================================
+def json_response(payload: Dict[str, Any], status: int = 200) -> func.HttpResponse:
+    """
+    Returns a JSON-formatted HTTP response with consistent headers.
+
+    ensure_ascii=False keeps non-Latin scripts [Hebrew, Japanese, ...] readable
+    in the response body.
+    """
+    return func.HttpResponse(
+        body=json.dumps(payload, ensure_ascii=False),
+        status_code=status,
+        mimetype="application/json",
+    )
+
+
+def get_default_credential():
+    """
+    Credential for the Foundry projects endpoint (Entra ID / AAD only).
+
+    Deployed: resolves to the Function App's Managed Identity via
+    DefaultAzureCredential. The identity must be in the SAME tenant as the Foundry
+    project (e.g. Teva) and hold the 'Azure AI User' role on it.
+
+    Local testing: set env var LOCAL_INTERACTIVE_LOGIN=1 to sign in through the
+    browser instead (useful when the Azure CLI is not installed). Set
+    AZURE_TENANT_ID to the Teva tenant GUID to sign in against that directory.
+    This branch is never taken in Azure because the env var is not set there.
+    """
+    tenant_id = os.getenv("AZURE_TENANT_ID") or None
+
+    if os.getenv("LOCAL_INTERACTIVE_LOGIN", "").lower() in ("1", "true", "yes"):
+        from azure.identity import InteractiveBrowserCredential
+
+        logging.info(
+            "Using InteractiveBrowserCredential for local sign-in (tenant=%s).",
+            tenant_id or "default",
+        )
+        return InteractiveBrowserCredential(tenant_id=tenant_id)
+
+    return DefaultAzureCredential(
+        exclude_interactive_browser_credential=True,
+        exclude_visual_studio_code_credential=True,
+        exclude_shared_token_cache_credential=True,
+        exclude_powershell_credential=True,
+    )
+
+
+def get_json_body(req: func.HttpRequest) -> Dict[str, Any]:
+    """
+    Parse the JSON request body ONCE and return it as a dict.
+
+    Returns an empty dict when there is no body or it is not valid JSON, so every
+    caller can safely use `.get(...)` without repeating the try/except guard.
+    """
+    try:
+        body = req.get_json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def extract_agent(req: func.HttpRequest, body: Dict[str, Any]) -> Optional[str]:
+    """
+    Read which mode/agent the caller wants: 'detect' or 'translate'.
+
+    Accepted from the query string (?agent=) or the JSON body, and normalised to
+    lower-case. Returns None when it is missing.
+    """
+    agent = req.params.get("agent") or body.get("agent")
+    if isinstance(agent, str) and agent.strip():
+        return agent.strip().lower()
+    return None
+
+
+def extract_message(req: func.HttpRequest, body: Dict[str, Any]) -> Optional[str]:
+    """Read the user message from the query string or the JSON body."""
+    message = req.params.get("message") or req.params.get("q") or req.params.get("query")
+    if message:
+        return message
+    return (
+        body.get("message")
+        or body.get("query")
+        or body.get("text")
+        or body.get("prompt")
+    )
+
+
+def extract_lang(req: func.HttpRequest, body: Dict[str, Any]) -> Optional[str]:
+    """
+    Read the TARGET language token for 'translate' mode.
+
+    Accepted from the query string (?lang=) or the JSON body ('lang'/'language').
+    Returns the raw token (e.g. 'jp', 'ja', 'Japanese') or None when missing;
+    resolve_language() maps it to a supported display name.
+    """
+    lang = (
+        req.params.get("lang")
+        or req.params.get("language")
+        or body.get("lang")
+        or body.get("language")
+    )
+    if isinstance(lang, str) and lang.strip():
+        return lang.strip()
+    return None
+
+
+#==============================================Language Detection==================================
+# ISO 639-1 code -> display name, for the SUPPORTED languages only.
+SUPPORTED: Dict[str, str] = {
+    "en": "English",
+    "he": "Hebrew",
+    "hr": "Croatian",
+    "bg": "Bulgarian",
+    "ro": "Romanian",
+    "fr": "French",
+    "de": "German",
+    "cs": "Czech",
+    "ru": "Russian",
+    "it": "Italian",
+    "nl": "Dutch",
+    "hu": "Hungarian",
+    "pl": "Polish",
+    "es": "Spanish",
+    "sl": "Slovenian",
+    "sk": "Slovak",
+    "el": "Greek",
+    "pt": "Portuguese",
+    "sr": "Serbian",
+    "bs": "Bosnian",
+    "mk": "Macedonian",
+    "kk": "Kazakh",
+    "uk": "Ukrainian",
+    "ko": "Korean",
+    "ja": "Japanese",
+    "ms": "Malay",
+    "id": "Indonesian",
+    "th": "Thai",
+    "vi": "Vietnamese",
+    "tr": "Turkish",
+    # Written text cannot separate Mandarin vs Cantonese, so both map here.
+    "zh": "Chinese (Mandarin)",
+}
+
+# Languages we deliberately DETECT so they get correctly REJECTED instead of
+# being misread as a supported language [all UNSUPPORTED].
+DECOYS = ["hi", "ur", "ar", "bn", "ta", "te", "fa", "mr", "pa", "gu", "kn", "ml"]
+
+NOT_SUPPORTED_MESSAGE = (
+    "I'm sorry, this language is not currently supported. Please switch to one of "
+    "the supported languages to continue. supported languages are: English, Hebrew, "
+    "Croatian, Bulgarian, Romanian, French, German, Czech, Russian, Italian, Dutch, "
+    "Hungarian, Polish, Spanish, Slovenian, Slovak, Greek, Portuguese, Serbian, "
+    "Bosnian, Macedonian, Kazakh, Ukrainian, Korean, Japanese, Malay, Indonesian, "
+    "Thai, Vietnamese, Turkish, Chinese (Mandarin), Chinese (Cantonese)"
+)
+
+# Common non-ISO / colloquial aliases callers may send for the TARGET language
+# (e.g. 'jp' for Japanese, 'kr' for Korean) -> the real ISO 639-1 code.
+LANG_ALIASES: Dict[str, str] = {
+    "jp": "ja",
+    "kr": "ko",
+    "cn": "zh",
+    "gr": "el",
+    "cz": "cs",
+    "ua": "uk",
+}
+
+
+def resolve_language(lang: Optional[str]) -> Optional[str]:
+    """
+    Resolve a caller-supplied language token to a SUPPORTED display name.
+
+    Accepts an ISO 639-1 code ('ja'), a common alias ('jp'), or the English
+    display name ('Japanese'), all case-insensitively. Returns None when the
+    target language is unknown or not in the supported list.
+    """
+    if not lang:
+        return None
+    key = lang.strip().lower()
+    key = LANG_ALIASES.get(key, key)
+    if key in SUPPORTED:
+        return SUPPORTED[key]
+    for name in SUPPORTED.values():
+        if name.lower() == key:
+            return name
+    return None
+
+
+# Below this confidence, and not clearly English, default to English
+# [per the rule "if uncertain, respond in English"].
+_MIN_CONFIDENCE = 0.55
+
+# Scripts NO supported language uses -> instant, guaranteed reject.
+_DEVANAGARI = re.compile("[ऀ-ॿ]")            # Hindi, Marathi, Nepali...
+_ARABIC = re.compile("[؀-ۿݐ-ݿ]")   # Arabic, Urdu, Persian...
+
+
+class LanguageDetector:
+    """
+    Offline, deterministic language detector [py3langid]. No LLM is used, so it
+    cannot hallucinate or reply in the wrong language: the same input always
+    returns the same output.
+    """
+
+    def __init__(self):
+        self._identifier = None
+
+    def _get_identifier(self):
+        """Lazy-load and cache the detector, restricted to supported + decoys."""
+        if self._identifier is None:
+            from py3langid.langid import LanguageIdentifier, MODEL_FILE
+
+            identifier = LanguageIdentifier.from_pickled_model(MODEL_FILE, norm_probs=True)
+            identifier.set_languages(list(SUPPORTED.keys()) + DECOYS)
+            self._identifier = identifier
+        return self._identifier
+
+    def detect(self, text: str) -> Dict[str, Any]:
+        """
+        Detect the language of `text` and say whether it is supported.
+
+        Returns a dict:
+            input      - the original text
+            language   - display name if supported, else None
+            code       - ISO 639-1 code of the best guess
+            supported  - True/False
+            confidence - 0.0 .. 1.0
+            message    - None if supported, else the exact "not supported" text
+        """
+        text = (text or "").strip()
+        if not text:
+            return self._supported("en", 1.0, text)  # nothing to detect -> English
+
+        # Hard deterministic rejects [scripts no supported language uses].
+        if _DEVANAGARI.search(text):
+            return self._rejected("hi", 1.0, text)
+        if _ARABIC.search(text):
+            return self._rejected("ar", 1.0, text)
+
+        code, confidence = self._get_identifier().classify(text)
+
+        # Low confidence and not clearly English -> default to English.
+        if confidence < _MIN_CONFIDENCE and code != "en":
+            return self._supported("en", confidence, text)
+
+        if code in SUPPORTED:
+            return self._supported(code, confidence, text)
+        return self._rejected(code, confidence, text)
+
+    @staticmethod
+    def _supported(code: str, confidence: float, text: str) -> Dict[str, Any]:
+        return {
+            "input": text,
+            "language": SUPPORTED[code],
+            "code": code,
+            "supported": True,
+            "confidence": round(float(confidence), 4),
+            "message": None,
+        }
+
+    @staticmethod
+    def _rejected(code: str, confidence: float, text: str) -> Dict[str, Any]:
+        return {
+            "input": text,
+            "language": None,
+            "code": code,
+            "supported": False,
+            "confidence": round(float(confidence), 4),
+            "message": NOT_SUPPORTED_MESSAGE,
+        }
+
+
+# Cache the detector across warm invocations [loading the model is expensive].
+_DETECTOR = LanguageDetector()
+
+
+#=============================================Azure AI Foundry=====================================
+class FoundryAgentService:
+    """
+    Service wrapper for the Azure AI Foundry 'multilingual-agent'.
+
+    On azure-ai-projects v2 the agent is NOT listed or fetched up front: it is
+    referenced by NAME at call time through the OpenAI-compatible Responses API
+    (project.get_openai_client()). This replaces the old list_agents/get_agent
+    resolution and the threads/runs workflow, none of which exist in the 2.x SDK.
+    """
+
+    def __init__(self, config: FoundryConfig, credential):
+        self.config = config
+        self.project = self._build_project_client(config.endpoint, credential)
+        # OpenAI-compatible client used for conversations + responses.
+        self.openai = self.project.get_openai_client()
+
+    @staticmethod
+    def _build_project_client(endpoint: str, credential) -> AIProjectClient:
+        """
+        Build the project client, opting into the preview Agent endpoints.
+
+        azure-ai-projects 2.1.x treats the Agent endpoints as a preview feature,
+        so the client must be constructed with allow_preview=True. Newer builds
+        accept the flag too; if a future version ever drops it, fall back cleanly.
+        """
+        try:
+            return AIProjectClient(
+                endpoint=endpoint, credential=credential, allow_preview=True
+            )
+        except TypeError:
+            return AIProjectClient(endpoint=endpoint, credential=credential)
+
+    def _run_and_get_reply(
+        self, text: str, additional_instructions: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Drive the Foundry agent over the Responses API and return its reply text.
+
+        The raw user message is stored as a conversation item; the optional
+        steering instruction (e.g. "translate into Japanese") is sent as this
+        turn's `input` so it stays cleanly separated from the text being acted on.
+        The agent is selected by NAME via `agent_reference`. Returns None if the
+        response does not complete or carries no text.
+        """
+        conversation = self.openai.conversations.create(
+            items=[{"type": "message", "role": "user", "content": text}]
+        )
+
+        response = self.openai.responses.create(
+            conversation=conversation.id,
+            input=additional_instructions or text,
+            extra_body={
+                "agent_reference": {
+                    "name": self.config.agent_name,
+                    "type": "agent_reference",
+                }
+            },
+        )
+
+        status = getattr(response, "status", None)
+        if status and status != "completed":
+            logging.error(
+                "Foundry response did not complete (status=%s). Error: %s",
+                status,
+                getattr(response, "error", None),
+            )
+            return None
+
+        return self._extract_reply_text(response)
+
+    @staticmethod
+    def _extract_reply_text(response) -> Optional[str]:
+        """
+        Pull the assistant's text out of a Responses API result, or None.
+
+        Prefer the SDK's `output_text` convenience (it concatenates every
+        output_text block); fall back to walking the `output` items so we stay
+        robust if that helper is absent.
+        """
+        aggregated = getattr(response, "output_text", None)
+        if aggregated and aggregated.strip():
+            return aggregated.strip()
+
+        parts = []
+        for item in getattr(response, "output", None) or []:
+            if getattr(item, "type", None) != "message":
+                continue
+            for block in getattr(item, "content", None) or []:
+                value = getattr(block, "text", None)
+                if value:
+                    parts.append(value)
+        combined = "".join(parts).strip()
+        return combined or None
+
+    def translate_message(self, text: str, target_language: str) -> Optional[str]:
+        """
+        Translate `text` into `target_language` using the Foundry agent.
+
+        The agent is instructed to return ONLY the translation so the reply can be
+        used verbatim. Returns the translated text or None if the run failed.
+        """
+        logging.info("Translating message into %s via Foundry agent.", target_language)
+        reply = self._run_and_get_reply(
+            text,
+            additional_instructions=(
+                f"Translate the user's message into {target_language}. "
+                f"Return ONLY the translated text, with no explanations, notes, "
+                f"or the original message."
+            ),
+        )
+
+        if reply:
+            logging.info("Foundry multilingual agent returned a translation.")
+        else:
+            logging.warning("Foundry multilingual agent did not return any text.")
+        return reply
+
+
+#==============================================Azure Function Entry================================
+def main(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    HTTP-triggered Azure Function entry point.
+
+    Routes the request by the 'agent' field:
+    - 'detect'    -> detect the language offline and return ONLY the language.
+    - 'translate' -> translate 'message' into the target 'lang' via Foundry.
+
+    Always returns a structured JSON response.
+    """
+    correlation_id = req.headers.get("x-correlation-id", str(uuid.uuid4()))
+    logging.info(
+        "Request received for Multilingual Agent function. CORRELATION_ID = %s",
+        correlation_id,
+    )
+
+    try:
+        # 0. Parse the JSON body once and work out which mode was requested.
+        body = get_json_body(req)
+        agent_mode = extract_agent(req, body)
+
+        # 1. Read the user message [required for both modes].
+        user_message = extract_message(req, body)
+        if not user_message or not str(user_message).strip():
+            return json_response(
+                {
+                    "Success": False,
+                    "error": {
+                        "message": "Input Error.",
+                        "details": "message is required [query string or JSON body].",
+                    },
+                },
+                status=400,
+            )
+
+        # 2a. DETECT mode -> offline language detection only, no LLM call.
+        if agent_mode == "detect":
+            detection = _DETECTOR.detect(str(user_message))
+            return json_response(
+                {
+                    "Success": True,
+                    "agent": "detect",
+                    "supported": detection["supported"],
+                    "language": detection["language"],
+                    "code": detection["code"],
+                    "confidence": detection["confidence"],
+                    "correlation_id": correlation_id,
+                    "message": detection["message"],
+                }
+            )
+
+        # 2b. TRANSLATE mode -> translate the message into the requested language.
+        if agent_mode == "translate":
+            target_language = resolve_language(extract_lang(req, body))
+            if not target_language:
+                return json_response(
+                    {
+                        "Success": False,
+                        "error": {
+                            "message": "Input Error.",
+                            "details": (
+                                "'lang' is required for translate and must be a "
+                                "supported language. " + NOT_SUPPORTED_MESSAGE
+                            ),
+                        },
+                    },
+                    status=400,
+                )
+
+            # Load configuration + credential, then call the Foundry agent.
+            config = load_config()
+            credential = get_default_credential()
+            foundry_service = FoundryAgentService(config.foundry, credential)
+            reply = foundry_service.translate_message(str(user_message), target_language)
+
+            return json_response(
+                {
+                    "Success": True,
+                    "agent": "translate",
+                    "language": target_language,
+                    "environment": config.environment,
+                    "correlation_id": correlation_id,
+                    "reply": reply,
+                }
+            )
+
+        # 3. Missing / unknown agent -> tell the caller the valid options.
+        return json_response(
+            {
+                "Success": False,
+                "error": {
+                    "message": "Input Error.",
+                    "details": "agent is required and must be 'detect' or 'translate'.",
+                },
+            },
+            status=400,
+        )
+
+    except Exception as unhandled_exception:
+        # Final safeguard: log and return generic error
+        logging.exception("Unhandled exception in Multilingual Agent function.")
+        return json_response(
+            {
+                "Success": False,
+                "error": {
+                    "message": "Unhandled server error. Please contact the automation team.",
+                    "details": str(unhandled_exception),
+                },
+            },
+            status=500,
+        )
