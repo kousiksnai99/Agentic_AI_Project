@@ -3,7 +3,7 @@ Task 1: Configure Supported Languages for POC
 Description:
 Configure the selected 11 languages from the existing 33-language framework.
 Create language mapping, aliases, locale configuration, and supported language validation logic.
-
+Comment: Configured the 11 POC languages with language code and name mapping, input normalization for non-standard language codes, and supported-language validation. Unit tested.
 Task 2: Implement LLM-Based Language Detection
 
 Description:
