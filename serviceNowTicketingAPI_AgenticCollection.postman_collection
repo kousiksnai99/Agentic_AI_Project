@@ -1,0 +1,1194 @@
+{
+  "info": {
+    "_postman_id": "689dc56c-4eaf-4f22-a66f-1510bb9d4573",
+    "name": "serviceNowTicketingAPI Copy 9",
+    "description": "IIR-12919\n\nIIR-12918\n\nIIR-12854\n\nIIR-12631\n\nIIR-12479",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "41949817"
+  },
+  "item": [
+    {
+      "name": "api",
+      "item": [
+        {
+          "name": "tpi",
+          "item": [
+            {
+              "name": "tevagenericwebservice",
+              "item": [
+                {
+                  "name": "incident",
+                  "item": [
+                    {
+                      "name": "{resourcePath}",
+                      "item": [
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                          "request": {
+                            "auth": {
+                              "type": "apikey",
+                              "apikey": [
+                                {
+                                  "key": "value",
+                                  "value": "531b46e7-b089-4225-a998-325accf964e1 ",
+                                  "type": "string"
+                                },
+                                {
+                                  "key": "key",
+                                  "value": "x-Gateway-APIKey",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "method": "GET",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "incident",
+                                ":resourcePath"
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "GET",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "incident",
+                                    ":resourcePath"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        },
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                          "request": {
+                            "method": "POST",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "incident",
+                                ":resourcePath"
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "incident",
+                                    ":resourcePath"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        },
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                          "request": {
+                            "method": "PUT",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "incident",
+                                ":resourcePath"
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "PUT",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "incident",
+                                    ":resourcePath"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        },
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                          "request": {
+                            "method": "PATCH",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "incident",
+                                ":resourcePath"
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "PATCH",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/incident/:resourcePath",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "incident",
+                                    ":resourcePath"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "sys_user",
+                  "item": [
+                    {
+                      "name": "{resourcePath}",
+                      "item": [
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/sys_user/:resourcePath",
+                          "request": {
+                            "method": "GET",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sys_user/:resourcePath",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "sys_user",
+                                ":resourcePath"
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "GET",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sys_user/:resourcePath",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "sys_user",
+                                    ":resourcePath"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        },
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/sys_user/:resourcePath",
+                          "request": {
+                            "method": "POST",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sys_user/:resourcePath",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "sys_user",
+                                ":resourcePath"
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sys_user/:resourcePath",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "sys_user",
+                                    ":resourcePath"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "{Reg_id}",
+                  "item": [
+                    {
+                      "name": "{catalog_id}",
+                      "item": [
+                        {
+                          "name": "submitCatalog",
+                          "item": [
+                            {
+                              "name": "{sys_id}",
+                              "item": [
+                                {
+                                  "name": "/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                  "request": {
+                                    "method": "GET",
+                                    "header": [],
+                                    "url": {
+                                      "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                      "host": [
+                                        "{{baseUrl}}"
+                                      ],
+                                      "path": [
+                                        "api",
+                                        "tpi",
+                                        "tevagenericwebservice",
+                                        ":Reg_id",
+                                        ":catalog_id",
+                                        "submitCatalog",
+                                        ":sys_id"
+                                      ],
+                                      "variable": [
+                                        {
+                                          "key": "Reg_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "catalog_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "sys_id",
+                                          "value": "string"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "response": [
+                                    {
+                                      "name": "Default response",
+                                      "originalRequest": {
+                                        "method": "GET",
+                                        "header": [
+                                          {
+                                            "description": "Added as a part of security scheme: apikey",
+                                            "key": "x-Gateway-APIKey",
+                                            "value": "<API Key>"
+                                          }
+                                        ],
+                                        "url": {
+                                          "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                          "host": [
+                                            "{{baseUrl}}"
+                                          ],
+                                          "path": [
+                                            "api",
+                                            "tpi",
+                                            "tevagenericwebservice",
+                                            ":Reg_id",
+                                            ":catalog_id",
+                                            "submitCatalog",
+                                            ":sys_id"
+                                          ],
+                                          "variable": [
+                                            {
+                                              "key": "Reg_id",
+                                              "value": "string"
+                                            },
+                                            {
+                                              "key": "catalog_id",
+                                              "value": "string"
+                                            },
+                                            {
+                                              "key": "sys_id",
+                                              "value": "string"
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "_postman_previewlanguage": "text",
+                                      "header": [],
+                                      "cookie": [],
+                                      "body": ""
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                  "request": {
+                                    "method": "POST",
+                                    "header": [],
+                                    "url": {
+                                      "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                      "host": [
+                                        "{{baseUrl}}"
+                                      ],
+                                      "path": [
+                                        "api",
+                                        "tpi",
+                                        "tevagenericwebservice",
+                                        ":Reg_id",
+                                        ":catalog_id",
+                                        "submitCatalog",
+                                        ":sys_id"
+                                      ],
+                                      "variable": [
+                                        {
+                                          "key": "Reg_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "catalog_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "sys_id",
+                                          "value": "string"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "response": [
+                                    {
+                                      "name": "Default response",
+                                      "originalRequest": {
+                                        "method": "POST",
+                                        "header": [
+                                          {
+                                            "description": "Added as a part of security scheme: apikey",
+                                            "key": "x-Gateway-APIKey",
+                                            "value": "<API Key>"
+                                          }
+                                        ],
+                                        "url": {
+                                          "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                          "host": [
+                                            "{{baseUrl}}"
+                                          ],
+                                          "path": [
+                                            "api",
+                                            "tpi",
+                                            "tevagenericwebservice",
+                                            ":Reg_id",
+                                            ":catalog_id",
+                                            "submitCatalog",
+                                            ":sys_id"
+                                          ],
+                                          "variable": [
+                                            {
+                                              "key": "Reg_id",
+                                              "value": "string"
+                                            },
+                                            {
+                                              "key": "catalog_id",
+                                              "value": "string"
+                                            },
+                                            {
+                                              "key": "sys_id",
+                                              "value": "string"
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "_postman_previewlanguage": "text",
+                                      "header": [],
+                                      "cookie": [],
+                                      "body": ""
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                  "request": {
+                                    "method": "PUT",
+                                    "header": [],
+                                    "url": {
+                                      "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                      "host": [
+                                        "{{baseUrl}}"
+                                      ],
+                                      "path": [
+                                        "api",
+                                        "tpi",
+                                        "tevagenericwebservice",
+                                        ":Reg_id",
+                                        ":catalog_id",
+                                        "submitCatalog",
+                                        ":sys_id"
+                                      ],
+                                      "variable": [
+                                        {
+                                          "key": "Reg_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "catalog_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "sys_id",
+                                          "value": "string"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "response": [
+                                    {
+                                      "name": "Default response",
+                                      "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [
+                                          {
+                                            "description": "Added as a part of security scheme: apikey",
+                                            "key": "x-Gateway-APIKey",
+                                            "value": "<API Key>"
+                                          }
+                                        ],
+                                        "url": {
+                                          "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog/:sys_id",
+                                          "host": [
+                                            "{{baseUrl}}"
+                                          ],
+                                          "path": [
+                                            "api",
+                                            "tpi",
+                                            "tevagenericwebservice",
+                                            ":Reg_id",
+                                            ":catalog_id",
+                                            "submitCatalog",
+                                            ":sys_id"
+                                          ],
+                                          "variable": [
+                                            {
+                                              "key": "Reg_id",
+                                              "value": "string"
+                                            },
+                                            {
+                                              "key": "catalog_id",
+                                              "value": "string"
+                                            },
+                                            {
+                                              "key": "sys_id",
+                                              "value": "string"
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "_postman_previewlanguage": "text",
+                                      "header": [],
+                                      "cookie": [],
+                                      "body": ""
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "name": "/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog",
+                              "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    ":Reg_id",
+                                    ":catalog_id",
+                                    "submitCatalog"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "Reg_id",
+                                      "value": "string"
+                                    },
+                                    {
+                                      "key": "catalog_id",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "response": [
+                                {
+                                  "name": "Default response",
+                                  "originalRequest": {
+                                    "method": "GET",
+                                    "header": [
+                                      {
+                                        "description": "Added as a part of security scheme: apikey",
+                                        "key": "x-Gateway-APIKey",
+                                        "value": "<API Key>"
+                                      }
+                                    ],
+                                    "url": {
+                                      "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog",
+                                      "host": [
+                                        "{{baseUrl}}"
+                                      ],
+                                      "path": [
+                                        "api",
+                                        "tpi",
+                                        "tevagenericwebservice",
+                                        ":Reg_id",
+                                        ":catalog_id",
+                                        "submitCatalog"
+                                      ],
+                                      "variable": [
+                                        {
+                                          "key": "Reg_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "catalog_id",
+                                          "value": "string"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "_postman_previewlanguage": "text",
+                                  "header": [],
+                                  "cookie": [],
+                                  "body": ""
+                                }
+                              ]
+                            },
+                            {
+                              "name": "/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog",
+                              "request": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    ":Reg_id",
+                                    ":catalog_id",
+                                    "submitCatalog"
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "Reg_id",
+                                      "value": "string"
+                                    },
+                                    {
+                                      "key": "catalog_id",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "response": [
+                                {
+                                  "name": "Default response",
+                                  "originalRequest": {
+                                    "method": "POST",
+                                    "header": [
+                                      {
+                                        "description": "Added as a part of security scheme: apikey",
+                                        "key": "x-Gateway-APIKey",
+                                        "value": "<API Key>"
+                                      }
+                                    ],
+                                    "url": {
+                                      "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/:Reg_id/:catalog_id/submitCatalog",
+                                      "host": [
+                                        "{{baseUrl}}"
+                                      ],
+                                      "path": [
+                                        "api",
+                                        "tpi",
+                                        "tevagenericwebservice",
+                                        ":Reg_id",
+                                        ":catalog_id",
+                                        "submitCatalog"
+                                      ],
+                                      "variable": [
+                                        {
+                                          "key": "Reg_id",
+                                          "value": "string"
+                                        },
+                                        {
+                                          "key": "catalog_id",
+                                          "value": "string"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "_postman_previewlanguage": "text",
+                                  "header": [],
+                                  "cookie": [],
+                                  "body": ""
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "sc_task",
+                  "item": [
+                    {
+                      "name": "{resourcePath}",
+                      "item": [
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/sc_task/:resourcePath",
+                          "request": {
+                            "method": "GET",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sc_task/:resourcePath?unique=string",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "sc_task",
+                                ":resourcePath"
+                              ],
+                              "query": [
+                                {
+                                  "key": "unique",
+                                  "value": "string"
+                                }
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "GET",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sc_task/:resourcePath?unique=string",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "sc_task",
+                                    ":resourcePath"
+                                  ],
+                                  "query": [
+                                    {
+                                      "key": "unique",
+                                      "value": "string"
+                                    }
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        },
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/sc_task/:resourcePath",
+                          "request": {
+                            "method": "POST",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sc_task/:resourcePath?unique=string",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "sc_task",
+                                ":resourcePath"
+                              ],
+                              "query": [
+                                {
+                                  "key": "unique",
+                                  "value": "string"
+                                }
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sc_task/:resourcePath?unique=string",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "sc_task",
+                                    ":resourcePath"
+                                  ],
+                                  "query": [
+                                    {
+                                      "key": "unique",
+                                      "value": "string"
+                                    }
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        },
+                        {
+                          "name": "/api/tpi/tevagenericwebservice/sc_task/:resourcePath",
+                          "request": {
+                            "method": "PUT",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sc_task/:resourcePath?unique=string",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "tpi",
+                                "tevagenericwebservice",
+                                "sc_task",
+                                ":resourcePath"
+                              ],
+                              "query": [
+                                {
+                                  "key": "unique",
+                                  "value": "string"
+                                }
+                              ],
+                              "variable": [
+                                {
+                                  "key": "resourcePath",
+                                  "value": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "response": [
+                            {
+                              "name": "Default response",
+                              "originalRequest": {
+                                "method": "PUT",
+                                "header": [
+                                  {
+                                    "description": "Added as a part of security scheme: apikey",
+                                    "key": "x-Gateway-APIKey",
+                                    "value": "<API Key>"
+                                  }
+                                ],
+                                "url": {
+                                  "raw": "{{baseUrl}}/api/tpi/tevagenericwebservice/sc_task/:resourcePath?unique=string",
+                                  "host": [
+                                    "{{baseUrl}}"
+                                  ],
+                                  "path": [
+                                    "api",
+                                    "tpi",
+                                    "tevagenericwebservice",
+                                    "sc_task",
+                                    ":resourcePath"
+                                  ],
+                                  "query": [
+                                    {
+                                      "key": "unique",
+                                      "value": "string"
+                                    }
+                                  ],
+                                  "variable": [
+                                    {
+                                      "key": "resourcePath",
+                                      "value": "string"
+                                    }
+                                  ]
+                                }
+                              },
+                              "_postman_previewlanguage": "text",
+                              "header": [],
+                              "cookie": [],
+                              "body": ""
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "now",
+          "item": [
+            {
+              "name": "table",
+              "item": [
+                {
+                  "name": "sc_task",
+                  "item": [
+                    {
+                      "name": "/api/now/table/sc_task",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/api/now/table/sc_task",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "now",
+                            "table",
+                            "sc_task"
+                          ]
+                        }
+                      },
+                      "response": [
+                        {
+                          "name": "Default response",
+                          "originalRequest": {
+                            "method": "GET",
+                            "header": [
+                              {
+                                "description": "Added as a part of security scheme: apikey",
+                                "key": "x-Gateway-APIKey",
+                                "value": "<API Key>"
+                              }
+                            ],
+                            "url": {
+                              "raw": "{{baseUrl}}/api/now/table/sc_task",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                "api",
+                                "now",
+                                "table",
+                                "sc_task"
+                              ]
+                            }
+                          },
+                          "_postman_previewlanguage": "text",
+                          "header": [],
+                          "cookie": [],
+                          "body": ""
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-Gateway-APIKey",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://apidev.tevapharm.com/gateway/serviceNowTicketingAPI/1.0"
+    }
+  ]
+}

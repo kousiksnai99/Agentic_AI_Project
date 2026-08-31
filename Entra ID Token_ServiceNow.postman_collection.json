@@ -1,0 +1,63 @@
+{
+  "info": {
+    "_postman_id": "253c982a-1ab6-478f-b4a4-e4a6200987cb",
+    "name": "Entra ID Token_ServiceNow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "41949817"
+  },
+  "item": [
+    {
+      "name": "getToken",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "api://7f70f393-ab7d-4e6b-a92e-952c23dbcba9/.default",
+              "type": "text"
+            },
+            {
+              "key": "client_id",
+              "value": "e91e93ca-955f-47d5-a491-a41985414c57",
+              "type": "text"
+            },
+            {
+              "key": "client_secret",
+              "value": "1c98Q~KxkROmy8Uyw8gSixhI6Dv7tdhnAzIO1a2n",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "https://login.microsoftonline.com/3f991a7b-ea93-4169-b28c-c36ff3e5b0d1/oauth2/v2.0/token",
+          "protocol": "https",
+          "host": [
+            "login",
+            "microsoftonline",
+            "com"
+          ],
+          "path": [
+            "3f991a7b-ea93-4169-b28c-c36ff3e5b0d1",
+            "oauth2",
+            "v2.0",
+            "token"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
