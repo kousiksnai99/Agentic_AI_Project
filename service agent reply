@@ -1,0 +1,4 @@
+(.venv) PS F:\Kousik\ServiceNowAgent> python local_server.py
+[local] truststore active (using Windows certificate store)
+[local] ServiceNowAgent listening on http://localhost:7071
+[local] POST http://localhost:7071/api/ServiceNowAgent
