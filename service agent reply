@@ -2,3 +2,54 @@
 [local] truststore active (using Windows certificate store)
 [local] ServiceNowAgent listening on http://localhost:7071
 [local] POST http://localhost:7071/api/ServiceNowAgent
+
+
+Sabse fast check (browser se)
+Postman kholne se pehle, browser mein yeh paste karke dekh sakte hain ki server zinda hai:
+
+
+http://localhost:7071/api/ServiceNowAgent?conversation_id=test1&action=get_incident
+JSON response aayega (400 with "No record found" — kyunki abhi koi incident nahi bana). Yeh normal hai, iska matlab server kaam kar raha hai.
+
+Postman setup
+Postman desktop kholein (web version localhost tak nahi pahunch sakta)
+New → HTTP Request
+Method: POST (dropdown se GET ko POST karein)
+URL: http://localhost:7071/api/ServiceNowAgent
+Headers tab → Key = Content-Type, Value = application/json
+Body tab → raw radio button → dropdown mein JSON select karein
+Authorization tab → No Auth (local pe function key nahi chahiye)
+Chaar requests — isi order mein
+1. Incident banayein (yeh pehle chalana zaroori hai)
+
+
+{"conversation_id":"conv-kousik-1","action":"create_incident","issue_type":"email","details":"Outlook will not start after the latest update."}
+Send dabayein → response:
+
+
+{"incident_id":"INC094854XX","issue_type":"email","state":"1","message":"Incident INC094854XX created in ServiceNow."}
+Yeh incident_id asli ServiceNow ticket number hai.
+
+2. Work note add karein — dhyaan dein, incident_id dena hi nahi hai
+
+
+{"conversation_id":"conv-kousik-1","action":"update_incident","note":"User called again for an update."}
+3. Wapas padhein
+
+
+{"conversation_id":"conv-kousik-1","action":"get_incident"}
+4. Resolve karein
+
+
+{"conversation_id":"conv-kousik-1","action":"resolve","note":"Reinstalled the Outlook profile."}
+Kya expect karein
+Requests 1, 2, 3 → HTTP 200, sab kaam karega
+Request 4 → HTTP 200 lekin message batayega ki state change nahi hua. Yeh expected hai, code ki galti nahi — ServiceNow ka rule usko revert karta hai (client ke saath pending issue).
+Har request ka log usi terminal mein live dikhega:
+
+
+[local] POST /api/ServiceNowAgent -> 200 {"incident_id": "INC094854XX", ...}
+Do tips
+Terminal mein jo incident_id mile, usse tevadev.service-now.com pe search karein — description aur work notes wahan dikhne chahiye. Yahi asli proof hai ki write ServiceNow tak pahuncha.
+
+Har naye test run ke liye naya conversation_id rakhein (conv-kousik-2, conv-kousik-3…). Same id se dobara create karne pe do incidents ban jaayenge aur lookup purana return karega.
